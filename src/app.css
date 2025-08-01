@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Millionaire Roman';
+  src: url('/fonts/Millionaire-Rom.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Millionaire Script';
+  src: url('/fonts/Millionaire-Scr.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+
+@font-face {
+  font-family: 'Sangbleu King';
+  src: url('/fonts/SangBleu-King.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+
+@font-face {
+  font-family: 'Sangbleu Light';
+  src: url('/fonts/SangBleuSans-Li.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Sangbleu Regular';
+  src: url('/fonts/SangBleuSans-Reg.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Snell Roundhand';
+  src: url('/fonts/SnellRoundhand.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Jaquel Light';
+  src: url('/fonts/Jaquel-Light.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Jaquel Regular';
+  src: url('/fonts/Jaquel-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* landingpage */
+@font-face {
+  font-family: 'Romie';
+  src: url('/fonts/Romie-Regular.otf') format('otf');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@theme {
+    --color-deepred:rgba(156, 0, 0, 1);
+
+    --breakpoint-xs: 23rem;
+}
+
+@layer utilities {
+  .font-caption{
+     font-family: "Raleway", ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.8rem; 
+    letter-spacing: 0.25em; /* 5% tracking */
+    color:aliceblue;
+  }
+
+  .font-countdowntime{
+    font-family:"Inter", ui-sans-serif, system-ui, sans-serif;
+    font-size:3rem;
+    color:beige;
+  }
+  .font-countdowncap{
+    font-family:"Inter", ui-sans-serif, system-ui, sans-serif;
+    font-size:0.8rem;
+    color:beige;
+    letter-spacing: 0.1em;
+  }
+
+ 
+
+}
