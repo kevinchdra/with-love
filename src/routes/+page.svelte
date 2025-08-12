@@ -1,6 +1,6 @@
 <script>
 import { onMount } from 'svelte';
-import MaskText from '../components/masktext.svelte';
+import MaskText from '$lib/components/masktext.svelte';
 
 const HeroHeading = [
   "Digital invites,",
