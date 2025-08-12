@@ -34,7 +34,7 @@ onMount(() => {
       }
     },
     {
-      threshold: [0.2],
+      threshold: [0.15],
       rootMargin: "0px 0px -50px 0px"
     }
   );
@@ -48,7 +48,7 @@ onMount(() => {
 function resetAnimation() {
   textElements.forEach((element) => {
     if (element) {
-      element.style.transition = 'transform 0.3s ease-out';
+      element.style.transition = 'transform 0.75s ease-out';
       element.style.transform = 'translateY(100%)';
     }})};
 
@@ -60,9 +60,9 @@ function animateIn() {
       
       // Animate with delay
       setTimeout(() => {
-        element.style.transition = 'transform 0.8s cubic-bezier(0.33, 1, 0.68, 1)';
+        element.style.transition = 'transform 1s cubic-bezier(0.33, 1, 0.68, 1)';
         element.style.transform = 'translateY(0%)';
-      }, index * 75);
+      }, index * 85);
     }
   });
 }
@@ -89,12 +89,17 @@ function animateIn() {
 
 .line-mask {
   overflow: hidden;
+  opacity:0.85;
 }
 
 .mask-text-line {
   margin: 0;
   transform: translateY(100%);
-  will-change: transform;
+  will-change: transform,opacity;
+  backface-visibility: hidden;
+   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
 }
 
 /* Mobile optimizations */

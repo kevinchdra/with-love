@@ -2,12 +2,13 @@
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
   import emailjs from '@emailjs/browser';
+  import { generateQrDataUrl } from '$lib/generateQrDataUrl.js';
 
   let form;
 
   export let guestSlug;
-  export let guest = null; // Accept guest data as prop
-  export let invite = null; // Accept invite data as prop (optional)
+  export let guest = null;
+  export let invite = null;
 
   let guestId;
   let name = '';
@@ -26,18 +27,12 @@
   let submissionMessage = '';
   let submissionError = '';
 
-  // Initialize data from props or fetch if not provided
   onMount(async () => {
-    console.log('🚀 PersonalRSVP mounting with:', { guestSlug, hasGuest: !!guest, hasInvite: !!invite });
-    
     if (guest) {
-      // Use pre-fetched guest data
       initializeGuestData(guest);
     } else if (guestSlug) {
-      // Fallback: fetch guest data if not provided via props
       await fetchGuestData();
     } else {
-      console.error('❌ No guestSlug provided');
       submissionError = 'Invalid invitation link';
     }
   });
@@ -52,13 +47,9 @@
     guestCount = guestData.guest_count || 1;
     dietary = guestData.dietary_restriction || '';
     wishes = guestData.wishes || '';
-    
-    console.log('✅ Guest data initialized:', { guestId, name, email });
   }
 
   async function fetchGuestData() {
-    console.log('🔍 Fetching guest data for slug:', guestSlug);
-    
     const { data, error } = await supabase
       .from('guests')
       .select('*')
@@ -68,7 +59,6 @@
     if (data) {
       initializeGuestData(data);
     } else {
-      console.error('❌ Failed to load guest:', error);
       submissionError = `Guest not found for slug: ${guestSlug}`;
     }
   }
@@ -91,66 +81,65 @@
   }
 
   async function handleSubmit() {
-  console.log('🔄 Starting RSVP submission...');
-  console.log('📊 Current form data:', {
-    guestId,
-    attending,
-    guestCount,
-    dietary,
-    wishes,
-    guestObject: guest
-  });
-
   if (!guestId) {
-    console.error('❌ No guest ID found');
     submissionError = 'Guest ID not found. Please refresh and try again.';
     return;
   }
 
-  // First, let's check if the guest exists in the database
-  const { data: existingGuest, error: fetchError } = await supabase
-    .from('guests')
-    .select('*')
-    .eq('guest_id', guestId)
-    .single();
+  try {
+    const { data: existingGuest, error: fetchError } = await supabase
+      .from('guests')
+      .select('*')
+      .eq('guest_id', guestId)
+      .single();
 
-  console.log('🔍 Existing guest check:', { existingGuest, fetchError });
+    if (fetchError) {
+      submissionError = `Guest not found: ${fetchError.message}`;
+      return;
+    }
 
-  if (fetchError) {
-    console.error('❌ Guest not found:', fetchError);
-    submissionError = `Guest not found: ${fetchError.message}`;
-    return;
-  }
+    const updateData = {
+      rsvp_status: attending === 'yes',
+      guest_count: attending === 'yes' ? guestCount : 0,
+      dietary_restriction: dietary,
+      wishes,
+      email,
+      phone,
+      submitted_at: new Date().toISOString()
+    };
 
-  // Now attempt the update
-  const updateData = {
-    rsvp_status: attending === 'yes',
-    guest_count: attending === 'yes' ? guestCount : 0,
-    dietary_restriction: dietary,
-    wishes,
-    email,
-    phone,
-    submitted_at: new Date().toISOString()
-    
-  };
+    // Generate QR code as data URL (no file upload needed!)
+    if (attending === 'yes') {
+      try {
+        console.log('🔄 Generating QR code for guest:', existingGuest.guest_id);
+        const qrDataUrl = await generateQrDataUrl(existingGuest.guest_id);
+        
+        if (qrDataUrl) {
+          updateData.qr_code_url = qrDataUrl; // Store base64 data URL directly
+          console.log('✅ QR code data URL generated and added');
+        }
+      } catch (qrError) {
+        console.error('❌ QR code generation failed:', qrError);
+        // Don't fail the entire RSVP if QR generation fails
+        submissionError = `RSVP saved but QR code generation failed: ${qrError.message}`;
+      }
+    }
 
-  console.log('📝 Update data:', updateData);
+    const { error: updateError } = await supabase
+      .from('guests')
+      .update(updateData)
+      .eq('guest_id', guestId);
 
-  const { data: updatedData, error: updateError } = await supabase
-    .from('guests')
-    .update(updateData)
-    .eq('guest_id', guestId)
-    .select(); // Add .select() to see what was updated
+    if (updateError) {
+      submissionError = `Update failed: ${updateError.message}`;
+    } else {
+      submitted = true;
+      submissionMessage = '🎉 RSVP updated successfully!';
+    }
 
-  console.log('✅ Update result:', { updatedData, updateError });
-
-  if (updateError) {
-    console.error('❌ Update failed:', updateError);
-    submissionError = `Update failed: ${updateError.message}`;
-  } else {
-    console.log('🎉 RSVP updated successfully!', updatedData);
-    submitted = true;
-    submissionMessage = '🎉 RSVP updated successfully!';
+  } catch (error) {
+    console.error('handleSubmit error:', error);
+    submissionError = `An error occurred: ${error.message}`;
   }
 }
 
@@ -160,7 +149,6 @@
       await handleSubmit();
       await sendEmail();
     } catch (err) {
-      console.error('❌ Final submit error:', err);
       submissionError = 'Something went wrong. Please try again.';
     } finally {
       submitting = false;
@@ -180,10 +168,11 @@
     }
   };
 
-   $: nameIsValid = /^[A-Za-z\s&]+$/.test(name) || name.trim() === '';
+  $: nameIsValid = /^[A-Za-z\s&]+$/.test(name) || name.trim() === '';
   $: phoneIsValid = /^[0-9+]+$/.test(phone) || phone.trim() === '';
   $: isStep1Complete = name.trim() && email.trim() && phone.trim() && nameIsValid && phoneIsValid;
 </script>
+
 
 <!-- Debug info -->
 
@@ -343,6 +332,9 @@
       />
       <p class={`text-lg font-caption uppercase !text-green ${submissionError ? 'text-red-400' : 'text-green-400'}`}>
         {submissionError ? 'RSVP failed to submit' : 'RSVP submitted successfully'}
+        {#if guest.qr_code_url}
+          <img src={guest.qr_code_url} alt="QR Code" class="w-32 h-32" />
+        {/if}
       </p>
     </div>
 {/if}

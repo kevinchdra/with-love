@@ -8,7 +8,7 @@ const HeroHeading = [
 ];
 
 const HeroSub = [
-	"Thoughtfully written. Beautifully designed.",
+	"Thoughtfully written. Beautifully designed",
 	"Crafted for the moment you've been waiting for."
 ];
 
@@ -44,6 +44,23 @@ const PlansSub = [
 "Pick a plan that suits your needs — or reach out",
 "and we'll tailor something just for you.",
 ]
+
+const TableHeaders = [
+  ["ESSENTIALS"],
+  ["SIGNATURE"]
+];
+
+const TableFeatures = [
+  ["RSVP & Guest Tracking"],
+  ["Digital Dashboard (Track Gifts & Attendance)"],
+  ["Google Map & Calendar Integration"],
+  ["WeChat & WhatsApp Ready"],
+  ["Send Invites with One Click"],
+  ["Countdown Timers"],
+  ["Personalised links"],
+  ["Wish Wall"],
+  ["Custom Background Music"]
+];
 
 
 //Navbar Viewport
@@ -123,9 +140,9 @@ let scrollProgress = 0;
 
 // Transform values calculated from scroll
 let heroScale = 1;
-let heroRotate = 0;
-let catalogScale = 0.8;
-let catalogRotate = 5;
+let heroRotate = 2.5;
+let catalogScale = 0.9;
+let catalogRotate = 2;
 
 onMount(() => {
 	const handleScroll = () => {
@@ -134,16 +151,17 @@ onMount(() => {
 			const windowHeight = window.innerHeight;
 			
 			// Calculate scroll progress (0 to 1)
-			const totalScrollHeight = containerRef.offsetHeight - windowHeight;
-			const currentScroll = Math.max(0, -rect.top);
-			scrollProgress = Math.min(1, currentScroll / totalScrollHeight);
+			const scrollDistance = -rect.top;
+            const maxScroll = windowHeight * 0.8; // Reduced scroll distance needed
+            scrollProgress = Math.min(1, Math.max(0, scrollDistance / maxScroll));
 			
 			// Update transform values based on scroll progress
-			heroScale = 1 - (scrollProgress * 0.2); // 1 to 0.8
-			heroRotate = scrollProgress * -5; // 0 to -5
-			catalogScale = 0.8 + (scrollProgress * 0.2); // 0.8 to 1
-			catalogRotate = 5 - (scrollProgress * 5); // 5 to 0
+			heroScale = 1 - (scrollProgress * 0.15); // 1 to 0.8
+			heroRotate = scrollProgress * -3; // 0 to -5
+			catalogScale = 0.9 + (scrollProgress * 0.1); // 0.8 to 1
+			catalogRotate = 2 - (scrollProgress * 2); // 5 to 0
 			
+
 			// Apply transforms directly
 			if (heroSection) {
 				heroSection.style.transform = `scale(${heroScale}) rotate(${heroRotate}deg)`;
@@ -158,10 +176,33 @@ onMount(() => {
 	window.addEventListener('scroll', handleScroll);
 	handleScroll(); // Initial call
 	
-	// Cleanup
-	return () => {
-		window.removeEventListener('scroll', handleScroll);
-	};
+	 // Fade in observer setup
+    let fadeInObserver;
+    fadeInObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('fade-in-show');
+                fadeInObserver.unobserve(entry.target);
+            }
+        });
+    }, {
+        root: null,
+        rootMargin: '0px',
+        threshold: 0.1
+    });
+
+    // Observe all elements with fade-in-hidden class
+    document.querySelectorAll('.fade-in-hidden').forEach((element) => {
+        fadeInObserver.observe(element);
+    });
+
+    // Single cleanup function that handles both
+    return () => {
+        window.removeEventListener('scroll', handleScroll);
+        if (fadeInObserver) {
+            fadeInObserver.disconnect();
+        }
+    };
 });
 
 import { goto } from '$app/navigation';
@@ -198,14 +239,39 @@ import { goto } from '$app/navigation';
 	transition: background-color 0.8s ease, color 0.8s ease, opacity 0.8s ease, transform 0.8s ease;
 }
 
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+:global(.animate-fade-in) {
+    animation: fadeIn 1s ease-in forwards;
+}
+
 /* Mobile-specific styles */
 @media (max-width: 768px) {
 
 }
+
+.fade-in-hidden {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+    will-change: opacity, transform;
+}
+
+.fade-in-show {
+    opacity: 1;
+    transform: translateY(0);
+}
 </style>
 
 <!-- Container with 200vh height for scroll effect -->
-<main bind:this={containerRef} class="relative h-[200vh]">
+<main bind:this={containerRef} class="relative height-[200vh] min-h-screen">
 	<!-- Mobile-optimized Navbar -->
 	<div
 		id="navbar"
@@ -230,7 +296,7 @@ import { goto } from '$app/navigation';
 	<!-- Hero Section (Section 1) - Now sticky with scroll animations -->
 	<section 
 		bind:this={heroSection}
-		class="sticky top-0 relative w-full min-h-screen bg-[#FFF1F0] flex items-center justify-center px-6 sm:px-10"
+		class="sticky top-15 relative w-full  flex items-center justify-center px-6 sm:px-10"
 		style="transition: transform 0.1s ease-out;"
 	>
 		<!-- Left: Text Content -->
@@ -243,7 +309,7 @@ import { goto } from '$app/navigation';
 			</p>
 		</div>
 		<!-- Right: Image + overlay -->
-		<div class="relative flex-1 max-w-xl mt-12 sm:mt-0">
+		<div class="relative flex-1 max-w-xl mt-12 sm:mt-0 fade-in-hidden">
 			<!-- Hero image -->
 			<img src="landingpage/heroimage.png" alt="Hero Couple" class="ml-auto max-w-[300px] sm:max-w-[400px] rotate-[-3deg]" />
 			<!-- Overlay PNG -->
@@ -258,7 +324,7 @@ import { goto } from '$app/navigation';
 	<!-- Catalog Section (Section 2) - With scroll animations -->
 	<section
 		bind:this={catalogSection}
-		class="relative h-screen bg-[#FAFAF8]"
+		class="relative min-h-screen bg-[#FAFAF8]"
 		style="transition: transform 0.1s ease-out;"
 	>
 		<div id="trigger" class="h-1"></div>
@@ -271,7 +337,7 @@ import { goto } from '$app/navigation';
 				<!-- Heading + paragraph -->
 				<div class="max-w-xl">
 					<h2 class="text-2xl sm:text-3xl md:text-5xl font-['Romie_Regular']"><MaskText phrases={CollectionHeading}/></h2>
-					<p class="text-gray-800 text-sm sm:text-md md:text-xl mt-4 sm:mt-6 tracking-[0.66px]">
+					<p class="text-gray-800 text-sm sm:text-md md:text-xl mt-2 sm:mt-4 tracking-[0.66px]">
 						<MaskText phrases={CollectionSub}/>
 					</p>
 				</div>
@@ -283,28 +349,32 @@ import { goto } from '$app/navigation';
 			<div class="mt-8 sm:mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 px-2 sm:px-4 md:px-20">
 				{#each Array(3) as _, index}
 				<!-- Card -->
-				<div class="rounded-md overflow-hidden">
-					<div class="relative w-full aspect-square group">
-						<img
-							src="/landingpage/card-placeholder.png"
-							alt="Card demo"
-							class="w-full h-full object-cover rounded-xl transition duration-300 group-hover:brightness-50"
-						/>
-						<!-- Preview Demo Button -->
-						<a href="/demos/public-floral" class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-300">
-							<span class="bg-white text-black px-3 py-2 sm:px-4 sm:py-2 rounded-md font-semibold text-xs sm:text-sm shadow-md tracking-[0.66px]">
-								Preview Demo
-							</span>
-							</a>
-					</div>
+				<div class="rounded-md fade-in-hidden">
+				<div class="relative w-full aspect-square group rounded-xl">
+					<img
+						src="/landingpage/card-placeholder.png"
+						alt="Card demo"
+						class="w-full h-full object-cover transition duration-300 transform group-hover:scale-105 group-hover:brightness-70"
+					/>
+					<!-- Preview Demo Button -->
+					<a href="/demos/public-floral" class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-300">
+						<span class="bg-transparent text-white/80 px-3 py-2 sm:px-4 sm:py-2 rounded-md font-semibold text-xs sm:text-sm shadow-md tracking-[0.66px]">
+							PREVIEW
+						</span>
+					</a>
+				</div>
+
 					<div class="mt-4 sm:mt-6 flex flex-col items-start space-y-1">
 						<h3 class="text-lg sm:text-xl md:text-2xl text-left tracking-[0.66px]">The Night We Met</h3>
 						<p class="text-sm sm:text-[16px] md:text-[20px] text-gray-400 text-left tracking-[0.66px]">
 							Rp. 150,000 - 200,000
 						</p>
-						<button  on:click={handleBuyNow} class="mt-3 sm:mt-4 bg-black text-white text-xs sm:text-sm md:text-md px-4 py-2 sm:px-6 sm:py-3 rounded-2xl tracking-[2px] sm:tracking-[4px] font-bold w-full sm:w-auto">
-							BUY NOW
-						</button>
+						<button  
+							on:click={handleBuyNow} 
+							class="transition-transform hover:scale-[1.02] mt-3 sm:mt-4 bg-black text-white text-xs sm:text-sm md:text-md px-12 py-2 sm:px-8 sm:py-3 rounded-full tracking-[2px] sm:tracking-[4px] font-bold w-[calc(100%-1rem)] sm:w-auto mx-2 sm:mx-0"
+							>
+							SHOP NOW
+							</button>
 					</div>
 				</div>
 				{/each}
@@ -314,11 +384,12 @@ import { goto } from '$app/navigation';
 </main>
 
 <!-- Guestbook Section -->
-<section id="guestbook-section" class="bg-[#F5A3B3] min-h-[500px] mt-[50vh] sm:h-[600px] md:h-[700px] snap-start">
-	<div class="flex flex-col md:flex-row items-center justify-between h-full px-6 sm:px-20 md:px-40 py-12 md:py-0">
+<section id="guestbook-section" class="relative bg-[#F5A3B3] min-h-screen ">
+	<div class="container mx-auto h-full flex items-center">
+    <div class="flex flex-col md:flex-row items-center justify-between py-20 px-6 sm:px-20 md:px-40 gap-24 md:gap-44">
 		<!-- Left text content -->
-		<div class="text-black max-w-md text-center md:text-left order-2 md:order-1">
-			<img src="/landingpage/illus-1.png" alt="Icon" class="w-12 sm:w-16 md:w-30 mx-auto md:mx-0" />
+		<div class=" text-black text-center md:text-left order-2 md:order-1 pr-12">
+			<img src="/landingpage/illus-1.png" alt="Icon" class="w-12 sm:w-16 md:w-30" />
 			<h2 class="mt-6 sm:mt-8 md:mt-12 text-2xl sm:text-3xl md:text-5xl font-['Romie_Regular']">
 				<MaskText phrases={GuestbookHeading}/>
 			</h2>
@@ -329,14 +400,15 @@ import { goto } from '$app/navigation';
 			<p class="text-base sm:text-lg md:text-xl lg:text-2xl mt-4 sm:mt-6 md:mt-8 leading-relaxed">
 				<MaskText phrases={GuestbookSub2}/>
 			</p>
-			<button class="mt-6 sm:mt-8 md:mt-12 bg-white text-black px-4 py-2 sm:px-6 sm:py-2 rounded-full text-xs sm:text-sm font-semibold">
+			<button class="transition-transform hover:scale-[1.02] mt-12 sm:mt-14	 bg-black text-white text-xs sm:text-sm md:text-md px-12 py-2 sm:px-8 sm:py-3 rounded-full tracking-[2px] sm:tracking-[4px] font-bold w-[calc(100%-1rem)] sm:w-auto mx-2 sm:mx-0">
 				VIEW MORE
 			</button>
 		</div>
 		<!-- Right-side image -->
-		<div class="flex items-center justify-center order-1 md:order-2 mb-8 md:mb-0">
+		<div class="flex items-center justify-center pl-20 order-1 md:order-2 mb-8 md:mb-0 fade-in-hidden">
 			<img src="/landingpage/guestbook-placeholder.png" alt="QR Hand" class="max-w-[280px] sm:max-w-[350px] md:max-w-none w-full h-auto object-contain rounded-2xl" />
 		</div>
+	</div>
 	</div>
 </section>
 
@@ -349,60 +421,53 @@ import { goto } from '$app/navigation';
 				<MaskText phrases={PlansSub}/>
 			</p>
 		</div>
-		<div class="w-full md:w-1/3 flex justify-center">
-			<img src="/landingpage/illus-1.png" alt="Decorative" class="w-12 sm:w-16 md:w-30" />
+		<div class="w-full md:w-1/3 flex justify-center ">
+			<img src="/landingpage/illus-1.png" alt="Decorative" class="w-12 sm:w-16 md:w-30 fade-in-hidden" />
 		</div>
 	</div>
 	
 	<!-- Mobile-friendly table -->
 	<div class="mt-8 sm:mt-10 overflow-x-auto">
 		<table class="min-w-full border-collapse border-spacing-0 text-sm sm:text-base md:text-xl">
-			<thead>
-				<tr class="border-t border-b border-black">
-					<th class="text-left p-2 sm:p-4 font-semibold border-r border-gray-300 min-w-[200px]"></th>
-					<th class="text-center p-2 sm:p-4 font-semibold border-r border-gray-300 min-w-[120px]">ESSENTIALS</th>
-					<th class="text-center p-2 sm:p-4 font-semibold min-w-[120px]">SIGNATURE</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each [
-					'RSVP & Guest Tracking',
-					'Digital Dashboard (Track Gifts & Attendance)',
-					'Google Map & Calendar Integration',
-					'WeChat & WhatsApp Ready',
-					'Send Invites with One Click',
-					'Countdown Timers',
-					'Personalised links',
-					'Wish Wall',
-					'Custom Background Music'
-				] as feature, i}
-				<tr>
-					<td class="border-r border-gray-300 p-0">
-						<div class={`p-2 sm:p-3 ${i === 0 ? 'pt-4 sm:pt-8' : ''} ${i === 8 ? 'pb-4 sm:pb-8' : ''}`}>
-							{feature}
-						</div>
-					</td>
-					<td class="text-center border-r border-gray-300 p-0">
-						<div class={`p-2 sm:p-3 ${i === 0 ? 'pt-4 sm:pt-8' : ''} ${i === 8 ? 'pb-4 sm:pb-8' : ''}`}>
-							{#if i < 6}
-							<img src="landingpage/checkmark.png" alt="Checkmark" class="mx-auto w-4 h-3 sm:w-5 sm:h-4" />
-							{/if}
-						</div>
-					</td>
-					<td class="text-center p-0">
-						<div class={`p-2 sm:p-3 ${i === 0 ? 'pt-4 sm:pt-8' : ''} ${i === 8 ? 'pb-4 sm:pb-8' : ''}`}>
-							<img src="landingpage/checkmark.png" alt="Checkmark" class="mx-auto w-4 h-3 sm:w-5 sm:h-4" />
-						</div>
-					</td>
-				</tr>
-				{/each}
-			</tbody>
-			<tfoot>
-				<tr class="border-t border-gray-300">
-					<td colspan="3" class="border-t border-black pt-2 sm:pt-4"></td>
-				</tr>
-			</tfoot>
-		</table>
+    <thead>
+        <tr class="border-t border-b border-black">
+            <th class="text-left p-2 sm:p-4 font-semibold border-r border-gray-300 min-w-[200px]"></th>
+            {#each TableHeaders as header, i}
+                <th class="text-center p-2 sm:p-4 font-semibold border-r border-gray-300 min-w-[120px]">
+                    <MaskText phrases={header} />
+                </th>
+            {/each}
+        </tr>
+    </thead>
+    <tbody>
+        {#each TableFeatures as feature, i}
+        <tr>
+            <td class="border-r border-gray-300 p-0">
+                <div class={`p-2 sm:p-3 ${i === 0 ? 'pt-4 sm:pt-8' : ''} ${i === 8 ? 'pb-4 sm:pb-8' : ''}`}>
+                    <MaskText phrases={feature} />
+                </div>
+            </td>
+            <td class="text-center border-r border-gray-300 p-0">
+                <div class={`p-2 sm:p-3 ${i === 0 ? 'pt-4 sm:pt-8' : ''} ${i === 8 ? 'pb-4 sm:pb-8' : ''}`}>
+                    {#if i < 6}
+                    <img src="landingpage/checkmark.png" alt="Checkmark" class="mx-auto w-4 h-3 sm:w-5 sm:h-4" />
+                    {/if}
+                </div>
+            </td>
+            <td class="text-center p-0">
+                <div class={`p-2 sm:p-3 ${i === 0 ? 'pt-4 sm:pt-8' : ''} ${i === 8 ? 'pb-4 sm:pb-8' : ''}`}>
+                    <img src="landingpage/checkmark.png" alt="Checkmark" class="mx-auto w-4 h-3 sm:w-5 sm:h-4" />
+                </div>
+            </td>
+        </tr>
+        {/each}
+    </tbody>
+    <tfoot>
+        <tr class="border-t border-gray-300">
+            <td colspan="3" class="border-t border-black pt-2 sm:pt-4"></td>
+        </tr>
+    </tfoot>
+</table>
 	</div>
 </section>
 
@@ -439,7 +504,6 @@ import { goto } from '$app/navigation';
 			<!-- Column 1 -->
 			<div class="flex flex-col space-y-3 sm:space-y-5">
 				<a href="#" class="opacity-70 hover:opacity-100 transition-opacity duration-200">About Us</a>
-				<a href="#" class="opacity-70 hover:opacity-100 transition-opacity duration-200">Pricing</a>
 				<a href="#" class="opacity-70 hover:opacity-100 transition-opacity duration-200">Features</a>
 				<a href="#" class="opacity-70 hover:opacity-100 transition-opacity duration-200">Contact</a>
 			</div>

@@ -16,6 +16,7 @@
 		"@sveltejs/adapter-vercel": "^5.8.1",
 		"@sveltejs/kit": "^2.27.0",
 		"@sveltejs/vite-plugin-svelte": "^6.0.0",
+		"@types/qrcode": "^1.5.5",
 		"supabase": "^2.31.4",
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",
@@ -27,11 +28,17 @@
 		"@emailjs/browser": "^4.4.1",
 		"@supabase/supabase-js": "^2.50.5",
 		"@tailwindcss/vite": "^4.1.11",
+		"gsap": "^3.13.0",
+		"html5-qrcode": "^2.3.8",
 		"lottie-web": "^5.13.0",
 		"motion": "^12.23.11",
+		"papaparse": "^5.5.3",
+		"qrcode": "^1.5.4",
 		"svelte-lottie": "^0.0.0",
 		"swiper": "^11.2.10",
 		"swiper.js": "^1.0.0",
-		"tailwindcss": "^4.1.11"
+		"tailwindcss": "^4.1.11",
+		"transliteration": "^2.3.5",
+		"xlsx": "^0.18.5"
 	}
 }

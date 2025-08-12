@@ -1,7 +1,17 @@
 <script>
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import MaskText from '../../../components/masktext.svelte';
   
+  const PlanHeading = [
+  "Select Your Plan",
+];
+
+
+
+  
+
+
   // Store data for passing to next steps
   let selectedPlan = 'essentials'; // Auto-selected
   let selectedInvite = {
@@ -41,6 +51,10 @@
     }
   };
   
+  const TemplateName = [
+    selectedInvite.name,
+  ];
+
   function selectPlan(planKey) {
     selectedPlan = planKey;
   }
@@ -71,9 +85,9 @@
 <div class="min-h-screen bg-[#FAFAF8] p-6 md:p-12">
   <div class="max-w-7xl mx-auto">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-12">
+    <div class="flex items-center justify-between mb-6">
       <h1 class="text-4xl md:text-5xl font-['Romie_Regular'] text-gray-900">
-        Select your plan
+        <MaskText phrases={PlanHeading} />
       </h1>
       
       <!-- Progress Steps -->
@@ -94,10 +108,10 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <!-- Plans Section -->
-      <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 ">
         <!-- Essentials Plan -->
         <div 
-          class="transition-transform duration-300 ease-in-out transform hover:scale-101 border-2 rounded-3xl p-8 cursor-pointer transition-all duration-300 {selectedPlan === 'essentials' ? 'border-[#F5A9A9] bg-[#FABCB9]' : 'border-gray-200 bg-transparent hover:border-gray-300'}"
+          class="transition-transform duration-300 ease-in-out transform hover:scale-102 border-2 rounded-2xl p-8 cursor-pointer transition-all duration-300 {selectedPlan === 'essentials' ? 'border-black/10 bg-[#F5A3B3]' : 'border-gray-200 bg-transparent hover:border-gray-300'}"
           on:click={() => selectPlan('essentials')}
           role="button"
           tabindex="0"
@@ -107,30 +121,31 @@
             <span class="text-sm font-semibold tracking-widest text-gray-600">BASIC</span>
           </div>
           
-          <h2 class="text-4xl font-bold mb-4 {selectedPlan === 'essentials' ? 'text-white/90' : 'text-gray-900'}">
+          <h2 class="text-4xl font-bold mb-4 tracking-[0.66px] transition-colors duration-300 {selectedPlan === 'essentials' ? 'text-white' : 'text-gray-900'}">
             Essentials
           </h2>
           
-          <p class="text-gray-700 mb-8 {selectedPlan === 'essentials' ? 'text-white/90' : ''}">
+          <p class="text-gray-700 mb-8 transition-colors duration-300 {selectedPlan === 'essentials' ? 'text-white/90' : ''}">
             {plans.essentials.description}
           </p>
           
-          <div class="text-4xl font-bold mb-8 {selectedPlan === 'essentials' ? 'text-white' : 'text-gray-900'}">
+          <div class="text-4xl font-bold mb-8 transition-colors duration-300 {selectedPlan === 'essentials' ? 'text-white' : 'text-gray-900'}">
             Rp. {plans.essentials.price.toLocaleString()}
           </div>
           
           <div class="space-y-4">
-            <p class="font-semibold mb-4 {selectedPlan === 'essentials' ? 'text-white' : 'text-gray-900'}">
+            <p class="font-semibold mb-4 transition-colors duration-300 {selectedPlan === 'essentials' ? 'text-white' : 'text-gray-900'}">
               Includes:
             </p>
             {#each plans.essentials.features as feature}
               <div class="flex items-start space-x-3">
-                <div class="w-5 h-5 rounded-full bg-black flex items-center justify-center mt-0.5">
-                  <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <div class=" rounded-full flex items-center justify-center mt-0.5 ">
+      
+                  <svg class="w-3 h-3 transition-colors duration-300" class:text-white={selectedPlan === 'essentials'}  class:text-black={selectedPlan !== 'essentials'} fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                   </svg>
                 </div>
-                <span class="text-sm {selectedPlan === 'essentials' ? 'text-white' : 'text-gray-700'}">
+                <span class="text-sm transition-colors duration-300 {selectedPlan === 'essentials' ? 'text-white' : 'text-gray-700'}">
                   {feature}
                 </span>
               </div>
@@ -140,7 +155,7 @@
 
         <!-- Signature Plan -->
         <div 
-          class="transition-transform duration-300 ease-in-out transform hover:scale-101 border-2 rounded-3xl p-8 cursor-pointer transition-all duration-300 {selectedPlan === 'signature' ? 'border-[#F5A3B3] bg-[#F5A3B3]' : 'border-gray-200 bg-transparent hover:border-gray-300'}"
+          class="transition-transform duration-300 ease-in-out transform hover:scale-102 border-2 rounded-2xl p-8 cursor-pointer transition-all duration-300 {selectedPlan === 'signature' ? 'border-black/10 bg-[#F5A3B3]' : 'border-gray-200 bg-transparent hover:border-gray-300'}"
           on:click={() => selectPlan('signature')}
           role="button"
           tabindex="0"
@@ -150,7 +165,7 @@
             <span class="text-sm font-semibold tracking-widest text-gray-600">VALUE PURCHASE | SAVE 60K</span>
           </div>
           
-          <h2 class="text-4xl font-bold mb-4 {selectedPlan === 'signature' ? 'text-white' : 'text-gray-900'}">
+          <h2 class="text-4xl font-bold mb-4 tracking-[0.66px] {selectedPlan === 'signature' ? 'text-white' : 'text-gray-900'}">
             Signature
           </h2>
           
@@ -183,19 +198,19 @@
       </div>
 
       <!-- Order Summary -->
-      <div class="bg-white rounded-2xl p-8 h-fit">
-        <h3 class="text-gray-500 font-semibold tracking-widest text-sm mb-8">
+      <div class="bg-transparent p-4 h-fit">
+        <h3 class="text-gray-500 font-semibold tracking-[0.33px] text-sm mb-3">
           YOUR ORDERS
         </h3>
-        
+        <hr class="mb-4">
         <div class="border-b border-gray-200 pb-6 mb-6">
           <h4 class="text-gray-500 font-semibold text-sm mb-4">INVITE</h4>
-          <div class="flex justify-between items-start mb-2">
+          <div class="flex justify-between items-start mb-12">
             <div>
-              <p class="font-semibold text-lg">{selectedInvite.name}</p>
-              <p class="text-gray-500 text-sm">{plans[selectedPlan].name} Bundle</p>
+              <p class=" text-lg"> {selectedInvite.name}</p>
+              <p class="text-gray-500 tracking-[0.33px] text-sm mt-1">{plans[selectedPlan].name} Bundle</p>
             </div>
-            <p class="font-semibold text-lg">
+            <p class="tracking-[0.33px] text-lg">
               Rp. {plans[selectedPlan].price.toLocaleString()}
             </p>
           </div>
@@ -203,15 +218,15 @@
         
         <div class="border-b border-gray-200 pb-6 mb-8">
           <div class="flex justify-between items-center">
-            <span class="font-semibold text-lg">TOTAL</span>
-            <span class="font-bold text-xl">
+            <span class="font-bold text-lg tracking-[0.33px]">TOTAL</span>
+            <span class="font-bold text-xl tracking-[0.33px]">
               Rp. {plans[selectedPlan].price.toLocaleString()}
             </span>
           </div>
         </div>
         
         <button 
-          class="transition-transform duration-300 ease-in-out transform hover:scale-101 w-full bg-black text-white py-4 rounded-lg font-semibold text-lg tracking-widest hover:bg-gray-800 transition-colors"
+          class="transition-transform duration-300 ease-in-out transform hover:scale-101 w-full bg-black text-white py-4 rounded-lg font-semibold text-lg tracking-widest transition-colors"
           on:click={handleNext}
         >
           NEXT

@@ -1,8 +1,9 @@
 <script>
   import { onMount } from 'svelte';
-
-  const cyclingWords = ['Love', 'Family','Moments', 'Memories','Promises','Together','Always','Forever'];
-  const finalWord = 'Eddie & Vania';
+  import { supabase } from '$lib/supabaseClient';
+  
+   const cyclingWords = ['Love', 'Family','Moments', 'Memories','Promises','Together','Always','Forever'];
+ 
 
   let currentWord = cyclingWords[0];
   let progress = 0;
@@ -15,6 +16,18 @@
   let speed = 400;
 
   let buttonVisible = false;
+
+   export let data;
+
+  if (!data || !data.guest || !data.invite) {
+    throw new Error("Missing guest or invite data");
+  }
+
+  const invite = data.invite;
+  const guest = data.guest;
+
+
+  const finalWord = invite.client_name;
 
 $: if (showButton) {
   setTimeout(() => {

@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   export let data;
 
   let TemplateComponent;
@@ -12,7 +13,7 @@
 </script>
 
 {#if TemplateComponent}
-  <svelte:component this={TemplateComponent} {data} />
-{:else}
-  <p>Loading guest invite...</p>
+  <div in:fade={{ duration: 200 }}>
+    <svelte:component this={TemplateComponent} {data} />
+  </div>
 {/if}

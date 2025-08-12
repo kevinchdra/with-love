@@ -2,15 +2,17 @@
   // ─── Imports ──────────────────────────────────────────────────────────────
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import PersonalRsvp from '../../components/personalrsvp.svelte';
-  import LottieClientOnly from '../../components/LottieClientOnly.svelte';
+  import PersonalRsvp from '$lib/components/personalrsvp.svelte';
+  import LottieClientOnly from '$lib/components/LottieClientOnly.svelte';
   import arrowDown from '$lib/lottie/arrowDown.json';
-  import LoadingScreen from '../../components/LoadingScreen.svelte';
-  import Wishes from '../../components/wishes.svelte';
+  import LoadingScreen from '$lib/components/LoadingScreen.svelte';
+  import Wishes from '$lib/components/wishes.svelte';
   import { tick } from 'svelte';
+  import { supabase } from '$lib/supabaseClient';
 
   // ─── Props ────────────────────────────────────────────────────────────────
-  export let eventDate = '2025-12-31T23:59:59'; // Format: YYYY-MM-DDTHH:MM:SS
+ 
+  $: eventDateObj = new Date(invite.event_date);
 
   // ─── State Variables ──────────────────────────────────────────────────────
     export let data;
@@ -30,21 +32,38 @@ $: guestSlug = $page.params.guestSlug;
   let audio;
 
    let copiedAccounts = {}; // store which account numbers have been copied
+   
+let videoUrl = '';
+
+onMount(() => {
+  const { data: publicData, error } = supabase
+    .storage
+    .from('invites-images')
+    .getPublicUrl(`${clientSlug}/video.webm`);
+
+  if (error) {
+    console.error('Error getting public URL:', error);
+  } else {
+    videoUrl = publicData.publicUrl;
+    console.log('Video URL:', videoUrl);
+  }
+});
 
   // ─── Google Maps Integration ──────────────────────────────────────────────
   const mapsUrl = "https://www.google.com/maps?q=Hotel+Mulia+Senayan,+Jakarta";
 
   // ─── Google Calendar Integration ─────────────────────────────────────────
-  const eventTitle = "Eddy & VaneonMssa's Sangjit Ceremony";
-  const location = "Jakarta, Indonesia";
-  const startDateTime = new Date("2025-08-18T11:30:00+07:00");
-  const endDateTime = new Date("2025-08-18T15:00:00+07:00");
+  const eventTitle = invite.event_title;
+const location = invite.location;
 
-  function toGoogleCalendarDate(date) {
-    return date.toISOString().replace(/-|:|\.\d\d\d/g, '');
-  }
+const startDateTime = new Date(invite.event_start_time);
+const endDateTime = new Date(invite.event_end_time);
 
-  const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventTitle)}&dates=${toGoogleCalendarDate(startDateTime)}/${toGoogleCalendarDate(endDateTime)}&location=${encodeURIComponent(location)}&sf=true&output=xml`;
+function toGoogleCalendarDate(date) {
+  return date.toISOString().replace(/-|:|\.\d\d\d/g, '');
+}
+
+const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventTitle)}&dates=${toGoogleCalendarDate(startDateTime)}/${toGoogleCalendarDate(endDateTime)}&location=${encodeURIComponent(location)}&sf=true&output=xml`;
 
   // ─── Carousel with Swipe + Pause ─────────────────────────────────────────
   let images = ["/1.jpg", "/2.jpg", "/3.jpg", "/4.jpg", "/5.jpg", "/6.jpg", "/7.jpg", "/8.jpg", "/9.jpg"];
@@ -114,7 +133,8 @@ $: guestSlug = $page.params.guestSlug;
 
   function updateCountdown() {
     const now = new Date().getTime();
-    const eventTime = new Date(eventDate).getTime();
+    const eventTime = eventDateObj.getTime();
+    
     const distance = eventTime - now;
 
     if (distance > 0) {
@@ -221,6 +241,8 @@ $: guestSlug = $page.params.guestSlug;
     '#666E5B', // deep olive
   ];
 
+
+
 </script>
 
 <style lang="postcss">
@@ -261,26 +283,30 @@ $: guestSlug = $page.params.guestSlug;
   Your browser does not support the audio tag.
 </audio>
 
-<LoadingScreen />
+<!-- <LoadingScreen /> -->
 <slot />
 
 
 <div class="h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth  ">
-<!--Landing Page-->
+
+<!--Start of Landing Page-->
 <div class="relative w-full min-h-screen overflow-hidden snap-start pb-[env(safe-area-inset-bottom)]
 ">
   <!-- Background image -->
    
  <video
-    class="fixed top-0 left-0 w-full h-full object-cover z-[-1]"
-    style="object-position: 65%;"
-    autoplay
-    muted
-    loop
-    playsinline
-  > <source src="/prewed.webm" type="video/webm" />
-    Your browser does not support the video tag.
-  </video>
+  class="fixed top-0 left-0 w-full h-full object-cover z-[-1]"
+  style="object-position: 65%;"
+  autoplay
+  muted
+  loop
+  playsinline
+>
+  {#if videoUrl}
+    <source src={videoUrl} type="video/webm" />
+  {/if}
+  Your browser does not support the video tag.
+</video>
 
   <!-- Dark overlay -->
   <div class="fixed top-0 left-0 w-full h-full bg-black/50 z-[-1]"></div>
@@ -296,10 +322,18 @@ $: guestSlug = $page.params.guestSlug;
     <div class="flex flex-col items-center justify-center gap-6 sm:gap-8 md:gap-10" >
       <p class="font-['Jaquel_Regular'] uppercase tracking-[0.35em] sm:tracking-[0.30em] md:tracking-[0.25em] opacity-90 text-white text-[10px] sm:text-[12px]">We Invite You To Celebrate</p>
         <h1 class="font-['Snell_Roundhand'] text-6xl sm:text-7xl md:text-8xl leading-none text-white">
-        Eddie <span class="font-['Snell_Roundhand']">& </span>Vania
+        <!-- Eddie <span class="font-['Snell_Roundhand']">& </span>Vania -->
+         {invite.client_name}
         </h1>
 
-      <p class="font-['Jaquel_Regular'] uppercase tracking-[0.35em] sm:tracking-[0.30em] md:tracking-[0.25em] opacity-90 text-white text-[10px] sm:text-[12px]">Sunday, 08 August 2026</p>
+      <p class="font-['Jaquel_Regular'] uppercase tracking-[0.35em] sm:tracking-[0.30em] md:tracking-[0.25em] opacity-90 text-white text-[10px] sm:text-[12px]">
+  {eventDateObj.toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  })}
+</p>
     </div>
 
     <button
@@ -309,9 +343,12 @@ $: guestSlug = $page.params.guestSlug;
     </button>
   </div>
 </div>
-<!--End of Introduction-->
+
+
+<!--End of Landing-->
 
 <!--Devotions-->
+{#if invite.section_toggle.includes("devotions")}
 <div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-screen px-4 sm:px-6 space-y-8 sm:space-y-12 snap-start"> 
       <img src="/cross.png" alt="cross" class="w-4 h-5 sm:w-3 sm:h-4 object-fill opacity-80 fade-in ">
       <h1 class="font-['Millionaire_Roman'] text-2xl sm:text-3xl md:text-4xl mt-0 mb-4 sm:mb-6 md:mb-8 px-4 fade-in " style="color: #FAFAEF;">I have found the one whom my soul loves.</h1>
@@ -323,9 +360,11 @@ $: guestSlug = $page.params.guestSlug;
     </div>
   
 </div>
+{/if}
 <!--End of Devotions-->
 
 <!--Couple-->
+{#if invite.section_toggle.includes("groom-intro")}
 <div class="relative flex flex-col items-center snap-start">
   <div class="absolute inset-0 bg-black/15 z-[5]"></div>
 
@@ -346,19 +385,20 @@ $: guestSlug = $page.params.guestSlug;
 
     <!-- Name -->
     <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
-      Eddie Cheng
+      {invite.groom_name}
     </h2>
 
     <div class="flex flex-col items-center space-y-">
       <h4 class="font-caption uppercase text-xs sm:text-sm">
-        SON OF GARY CHENG & GRACIA LEE
+       {invite.groom_parents}
       </h4>
       <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
     </div>
   </div>
 </div>
+{/if}
 
-
+{#if invite.section_toggle.includes("bride-intro")}
 <div class="relative flex flex-col items-center snap-start">
   <div class="absolute inset-0 bg-black/15 z-[5]"></div>
 
@@ -379,21 +419,24 @@ $: guestSlug = $page.params.guestSlug;
 
     <!-- Name -->
     <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
-      Vania Halim
+      {invite.bride_name}
     </h2>
 
     <div class="flex flex-col items-center space-y-">
       <h4 class="font-caption uppercase text-xs sm:text-sm">
-        DAUGHTER OF KEN HALIM & JENNA CHUNG
+       {invite.bride_parents}
       </h4>
       <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
     </div>
   </div>
 </div>
+{/if}
 <!--End of Couple-->
+
 
 <!-- Events -->
 <div class="flex flex-col items-start justify-center text-left px-8 sm:px-10 md:px-12 py-10 sm:py-12 md:py-14 space-y-6 sm:space-y-8 md:space-y-10 bg-transparent text-white snap-start">
+  {#if invite.section_toggle.includes("holy-matrimony")}
   <!-- Holy Matrimony -->
   <div class="space-y-4 sm:space-y-6 md:space-y-8 w-full fade-in">
     <p class="uppercase text-xs sm:text-[8px] mb-8 font-caption opacity-80">Event</p>
@@ -407,7 +450,7 @@ $: guestSlug = $page.params.guestSlug;
       The Grand Ballroom<br />
       Hotel Mulia Senayan, Jakarta
     </p>
-
+    
     <!-- Location Button -->
     <a
       href={mapsUrl}
@@ -418,7 +461,9 @@ $: guestSlug = $page.params.guestSlug;
       + View Location
     </a>
   </div>
+{/if}
 
+{#if invite.section_toggle.includes("wedding-reception")}
   <!-- Wedding Reception -->
   <div class="space-y-4 sm:space-y-6 md:space-y-8 w-full fade-in">
     <h2 class="text-3xl sm:text-4xl md:text-5xl font-['Sangbleu_King']">Wedding Reception</h2>
@@ -442,9 +487,13 @@ $: guestSlug = $page.params.guestSlug;
       + View Location
     </a>
   </div>
+  {/if}
 </div>
+
 <!-- End of Events -->
 
+
+{#if invite.section_toggle.includes("countdown")}
 <!--Countdown-->
 <div class="relative z-10 flex flex-col items-center justify-center text-center min-h-screen px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16 snap-start">
   <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22 fade-in" style="color: #FAFAEF;">Until Our Celebration</h1>
@@ -494,7 +543,7 @@ $: guestSlug = $page.params.guestSlug;
   </a>
 </div>
 <!--End of Countdown-->
-
+{/if}
 
 
 <!-- RSVP -->
@@ -513,16 +562,19 @@ $: guestSlug = $page.params.guestSlug;
 
 
 <!-- Wishes -->
+ {#if invite.section_toggle.includes("wishes")}
 <div class="relative w-full min-h-screen overflow-hidden snap-start">
   <div class="fade-in">
   <Wishes />
 </div>
 </div>
+{/if}
 <!-- End of Wishes -->
 
 
 
 <!-- Dress Code -->
+  {#if invite.section_toggle.includes("dress-code")}
 <div class="relative w-full min-h-screen overflow-hidden snap-start">
   <div class="fade-in">
   
@@ -546,11 +598,13 @@ $: guestSlug = $page.params.guestSlug;
   </div>
 </div>
 </div>
+{/if}
 <!-- End of Dress Code -->
 
 
 
 <!-- Our Moments -->
+  {#if invite.section_toggle.includes("our-moments")}
 <div class="relative z-10 flex flex-col items-center justify-center text-center h-screen px-4 sm:px-6 space-y-6 sm:space-y-8 snap-start">
   <div class="fade-in">
   <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Our Moments</h1>
@@ -574,12 +628,13 @@ $: guestSlug = $page.params.guestSlug;
 </div>
 </div>
 </div>
+{/if}
 <!-- End of Our Moments -->
 
 
 
 
-
+ {#if invite.section_toggle.includes("wedding-gift")}
 <!-- Wedding Gift-->
   <div class="relative z-10 flex flex-col items-center justify-center text-center h-screen px-4 sm:px-6 space-y-6 sm:space-y-8 snap-start  fade-in">
   <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">A Token of Love</h1>
@@ -645,7 +700,9 @@ $: guestSlug = $page.params.guestSlug;
 
 </div>
 <!--End of Wedding Gift-->
+{/if}
 
+ {#if invite.section_toggle.includes("thank-you")}
 <!--Thank you-->
   <div class="relative flex flex-col items-center snap-start w-full h-screen  fade-in">
       <div class="absolute inset-0 bg-black/50 z-[5]"></div>
@@ -655,6 +712,7 @@ $: guestSlug = $page.params.guestSlug;
         <h4 class="font-caption uppercase text-xs sm:text-sm leading-relaxed">THANK YOU FOR YOUR SUPPORT AND PRESENCE, WE ARE DEEPLY HONORED AND GRATEFUL. <br><br> YOUR SUPPORT AND KIND WISHES MEAN THE WORLD TO US. WE CAN'T WAIT TO SEE YOU AND CELEBRATE LOVE, TOGETHER. <br><br>LOVE, ED & VAN</h4>
       </div>
   </div>
+  {/if}
 </div>
 
 
