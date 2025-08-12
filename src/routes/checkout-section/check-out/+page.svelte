@@ -69,103 +69,100 @@
     return Object.keys(errors).length === 0;
   }
   
+  // DISABLED VERSION - Simple form submission without payment
+  async function handleCheckout() {
+    if (!validateForm()) {
+      return;
+    }
+    
+    isSubmitting = true;
+    
+    try {
+      // Simulate processing time
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Show success message (replace with your preferred action)
+      alert('Form submitted successfully! Payment is currently disabled. You will be contacted via WhatsApp soon.');
+      
+      // Clear stored data
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('orderData');
+        goto('/'); // Redirect to home or success page
+      }
+    } catch (error) {
+      alert('Something went wrong. Please try again.');
+    } finally {
+      isSubmitting = false;
+    }
+  }
+
+  // ORIGINAL DUITKU VERSION - COMMENTED OUT
   // async function handleCheckout() {
-  //   if (!validateForm()) {
-  //     return;
-  //   }
-    
-  //   isSubmitting = true;
-    
-  //   try {
-  //     // Simulate API call
-  //     await new Promise(resolve => setTimeout(resolve, 2000));
-      
-  //     // Here you would typically:
-  //     // 1. Send order data to your backend
-  //     // 2. Process payment
-  //     // 3. Send confirmation emails
-  //     // 4. Redirect to success page
-      
-  //     alert('Order submitted successfully! You will be contacted via WhatsApp soon.');
-      
-  //     // Clear stored data
-  //     if (typeof window !== 'undefined') {
-  //       sessionStorage.removeItem('orderData');
-  //       goto('/'); // Redirect to home or success page
-  //     }
-  //   } catch (error) {
-  //     alert('Something went wrong. Please try again.');
-  //   } finally {
-  //     isSubmitting = false;
-  //   }
+  // if (!validateForm()) {
+  //   return;
   // }
 
-  async function handleCheckout() {
-  if (!validateForm()) {
-    return;
-  }
-
-  // Check minimum amount
-  if (orderData.total < 10000) {
-    alert('Minimum order amount is Rp 10.000');
-    return;
-  }
+  // // Check minimum amount
+  // if (orderData.total < 10000) {
+  //   alert('Minimum order amount is Rp 10.000');
+  //   return;
+  // }
   
-  isSubmitting = true;
+  // isSubmitting = true;
   
-  try {
-    // Generate unique invoice ID (timestamp + random string)
-    const invoiceId = `INV${Date.now()}${Math.random().toString(36).substring(2, 7)}`;
+  // try {
+  //   // Generate unique invoice ID (timestamp + random string)
+  //   const invoiceId = `INV${Date.now()}${Math.random().toString(36).substring(2, 7)}`;
     
-    // Prepare payment data according to Duitku's requirements
-    const paymentData = {
-      amount: orderData.total,
-      invoiceId,
-      customerName: `${formData.firstName} ${formData.lastName}`.trim(),
-      email: formData.email,
-      phone: formData.phone
-    };
+  //   // Prepare payment data according to Duitku's requirements
+  //   const paymentData = {
+  //     amount: orderData.total,
+  //     invoiceId,
+  //     customerName: `${formData.firstName} ${formData.lastName}`.trim(),
+  //     email: formData.email,
+  //     phone: formData.phone
+  //   };
 
-    console.log('Sending payment data:', paymentData); // Debug log
+  //   console.log('Sending payment data:', paymentData); // Debug log
 
-    // Call your payment API endpoint
-    const response = await fetch('/api/checkout', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(paymentData)
-    });
+  //   // Call your payment API endpoint
+  //   const response = await fetch('/api/checkout', {
+  //     method: 'POST',
+  //     headers: {
+  //       'Content-Type': 'application/json'
+  //     },
+  //     body: JSON.stringify(paymentData)
+  //   });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+  //   if (!response.ok) {
+  //     throw new Error(`HTTP error! status: ${response.status}`);
+  //   }
 
-    const result = await response.json();
-    console.log('Payment API response:', result); // Debug log
+  //   const result = await response.json();
+  //   console.log('Payment API response:', result); // Debug log
 
-    if (result.statusCode === "00") {
-      // Store order data before redirect
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('pendingOrder', JSON.stringify({
-          orderData,
-          formData,
-          invoiceId
-        }));
-      }
-      // Redirect to Duitku payment page
-      window.location.href = result.paymentUrl;
-    } else {
-      throw new Error(result.statusMessage || 'Payment initialization failed');
-    }
+  //   if (result.statusCode === "00") {
+  //     // Store order data before redirect
+  //     if (typeof window !== 'undefined') {
+  //       sessionStorage.setItem('pendingOrder', JSON.stringify({
+  //         orderData,
+  //         formData,
+  //         invoiceId
+  //       }));
+  //     }
+  //     // Redirect to Duitku payment page
+  //     window.location.href = result.paymentUrl;
+  //   } else {
+  //     throw new Error(result.statusMessage || 'Payment initialization failed');
+  //   }
 
-  } catch (error) {
-    console.error('Payment error:', error);
-    alert(`Payment initialization failed: ${error.message}`);
-  } finally {
-    isSubmitting = false;
-  }
-}
+  // } catch (error) {
+  //   console.error('Payment error:', error);
+  //   alert(`Payment initialization failed: ${error.message}`);
+  // } finally {
+  //   isSubmitting = false;
+  // }
+  // }
   
   function goBack() {
     if (typeof window !== 'undefined') {
@@ -201,6 +198,25 @@
         <div class="w-8 h-0.5 bg-gray-300"></div>
         <div class="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center font-semibold">
           3
+        </div>
+      </div>
+    </div>
+
+    <!-- PAYMENT DISABLED NOTICE -->
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-yellow-800">
+            Payment System Temporarily Disabled
+          </h3>
+          <div class="mt-2 text-sm text-yellow-700">
+            <p>Online payment is currently under maintenance. Form submission will be processed manually. You will be contacted via WhatsApp for payment instructions.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -344,7 +360,7 @@
     </svg>
     PROCESSING...
   {:else}
-    PAY NOW
+    SUBMIT ORDER
   {/if}
 </button>
       </div>
