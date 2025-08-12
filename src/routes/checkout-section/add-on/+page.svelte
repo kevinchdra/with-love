@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import MaskText from '../../../components/masktext.svelte';
+  import MaskText from '$lib/components/masktext.svelte';
   import { fade, scale } from 'svelte/transition';
   
    const AddOnHeading = [
