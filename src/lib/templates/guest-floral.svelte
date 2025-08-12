@@ -1,3 +1,5 @@
+<!--guest-floral-->
+
 <script>
   // ─── Imports ──────────────────────────────────────────────────────────────
   import { onMount, onDestroy } from 'svelte';
