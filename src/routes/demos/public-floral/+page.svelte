@@ -2,11 +2,11 @@
   // ─── Imports ──────────────────────────────────────────────────────────────
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import RsvpDemo from '../../../components/rsvp-demo.svelte'; // <-- NEW
-  import LottieClientOnly from '../../../components/LottieClientOnly.svelte';
+  import RsvpDemo from '$lib/components/rsvp-demo.svelte'; // <-- NEW
+  import LottieClientOnly from '$lib/components/LottieClientOnly.svelte';
   import arrowDown from '$lib/lottie/arrowDown.json';
-  import LoadingScreen from '../../../components/LoadingScreen.svelte';
-  import WishesDemo from '../../../components/wishes-demo.svelte'; // <-- NEW
+  import LoadingScreen from '$lib/components/LoadingScreen.svelte';
+  import WishesDemo from '$lib/components/wishes-demo.svelte'; // <-- NEW
   import { tick } from 'svelte';
 
   // ─── Props ────────────────────────────────────────────────────────────────
