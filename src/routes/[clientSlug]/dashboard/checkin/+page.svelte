@@ -98,16 +98,30 @@ async function startScanner() {
 		const cameras = await Html5Qrcode.getCameras();
 		if (cameras && cameras.length) {
 			await html5QrCode.start(
-				{ facingMode: "environment" },
+				{ 
+					facingMode: "environment",
+					// Request higher resolution from camera
+					width: { ideal: 1920, min: 1280 },
+					height: { ideal: 1080, min: 720 }
+				},
 				{
 					fps: 10,
-					qrbox: { width: 250, height: 250 },
-					aspectRatio: 1.0,
-					supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+					qrbox: function(viewfinderWidth, viewfinderHeight) {
+						// Large detection area for better scanning
+						const size = Math.min(viewfinderWidth, viewfinderHeight) * 0.7;
+						return { width: size, height: size };
+					},
+					aspectRatio: 1.7778
 				},
 				onScanSuccess,
 				onScanFailure
 			);
+
+			// Force resize after initialization but preserve detection
+			setTimeout(() => {
+				forceVideoFullscreen();
+			}, 100);
+			
 		} else {
 			errorMessage = "No camera found";
 		}
@@ -115,6 +129,33 @@ async function startScanner() {
 		errorMessage = "Camera access error: " + err;
 		console.error('Scanner start error:', err);
 	}
+}
+
+// Function to gently force fullscreen without breaking detection
+function forceVideoFullscreen() {
+	const videos = document.querySelectorAll('#reader video');
+	const containers = document.querySelectorAll('#reader > div');
+	
+	videos.forEach(video => {
+		if (video) {
+			video.style.setProperty('width', '100vw', 'important');
+			video.style.setProperty('height', '100vh', 'important');
+			video.style.setProperty('object-fit', 'cover', 'important');
+			video.style.setProperty('position', 'fixed', 'important');
+			video.style.setProperty('top', '0', 'important');
+			video.style.setProperty('left', '0', 'important');
+		}
+	});
+	
+	containers.forEach(container => {
+		if (container) {
+			container.style.setProperty('width', '100vw', 'important');
+			container.style.setProperty('height', '100vh', 'important');
+			container.style.setProperty('position', 'fixed', 'important');
+			container.style.setProperty('top', '0', 'important');
+			container.style.setProperty('left', '0', 'important');
+		}
+	});
 }
 
 async function stopScanner() {
@@ -166,101 +207,182 @@ onMount(async () => {
 </script>
 
 <style>
-.pink-bg {
-	background: linear-gradient(to bottom, #f9c2cf, #dd748a);
-}
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
 
-#reader {
-	position: relative;
+:global(html, body) {
+	font-family: 'DM Sans', sans-serif;
+	margin: 0;
+	padding: 0;
+	height: 100%;
 	overflow: hidden;
 }
 
+/* Targeted fullscreen camera fix for html5-qrcode */
+#reader, 
 #reader video {
+	position: fixed !important;
+	top: 0 !important;
+	left: 0 !important;
+	width: 100vw !important;
+	height: 100vh !important;
 	object-fit: cover !important;
-	width: 100% !important;
-	height: 100% !important;
-	position: absolute !important;
-	top: 0 !important;
-	left: 0 !important;
+	background: black !important;
 }
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+/* Kill the library's inner containers */
+#reader > div,
+#reader > div > div {
+	position: fixed !important;
+	top: 0 !important;
+	left: 0 !important;
+	width: 100vw !important;
+	height: 100vh !important;
+	max-width: none !important;
+	max-height: none !important;
+	overflow: hidden !important;
+}
 
-:global(html) {
+/* Hide scanning region overlays */
+#reader__scan_region,
+#reader__dashboard_section {
+	display: none !important;
+}
+
+/* Text overlay styles */
+.overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	z-index: 10;
+	pointer-events: none;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+}
+
+.client-name {
 	font-family: 'DM Sans', sans-serif;
-	background-color: #FAFAF8;
-	color: #000;
+	font-size: clamp(1.5rem, 5vw, 2.5rem);
+	font-weight: 500;
+	letter-spacing: 0.2em;
+	color: white;
+	text-align: center;
+	text-transform: uppercase;
+	margin-bottom: 0.5rem;
+	text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
 }
 
-#reader canvas {
-	position: absolute !important;
-	top: 0 !important;
-	left: 0 !important;
-	width: 100% !important;
-	height: 100% !important;
+.event-title {
+	font-family: 'DM Sans', sans-serif;
+	font-size: clamp(0.8rem, 2.5vw, 1rem);
+	font-weight: 400;
+	letter-spacing: 0.3em;
+	color: white;
+	text-align: center;
+	text-transform: uppercase;
+	text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
 }
 
-#reader > div {
-	width: 100% !important;
-	height: 100% !important;
+/* Loading and error states */
+.loading-screen {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	background: black;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 20;
 }
 
-/* Responsive adjustments for smaller screens */
-@media (max-width: 768px) {
-	#reader {
-		width: 100% !important;
-		height: 100% !important;
-	}
+.error-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	background: rgba(0, 0, 0, 0.9);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	z-index: 15;
+	padding: 2rem;
 }
+
+.error-message {
+	color: #ef4444;
+	text-align: center;
+	margin-bottom: 2rem;
+	font-size: clamp(0.875rem, 3vw, 1.125rem);
+	max-width: 400px;
+}
+
+.retry-button {
+	background: white;
+	color: black;
+	border: none;
+	padding: 1rem 2rem;
+	font-family: 'DM Sans', sans-serif;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	pointer-events: auto;
+}
+
+.retry-button:hover {
+	background: #f3f4f6;
+	transform: translateY(-1px);
+}
+
+/* Remove QR borders as requested */
 </style>
 
 {#if loading}
-	<div class="flex h-screen items-center justify-center px-4">
+	<div class="loading-screen">
 		<div class="text-center">
-			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
-			<p class="text-sm sm:text-base">Looking up guest...</p>
+			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+			<p class="text-white text-sm sm:text-base font-medium">Looking up guest...</p>
 		</div>
 	</div>
 {:else}
-	<div class="flex flex-col md:flex-row h-screen bg-black">
-		<!-- Left side - Title -->
-		<div class="w-full md:w-1/2 pink-bg flex items-center justify-center py-8 md:py-0">
-			<h1 class="text-white text-2xl sm:text-3xl md:text-4xl font-light text-center">
-				{clientData ? clientData.client_name : 'Loading...'}
+	<!-- Fullscreen camera view -->
+	<div id="reader"></div>
+	
+	<!-- Text overlay -->
+	{#if clientData && !errorMessage}
+		<div class="overlay">
+			<h1 class="client-name">
+				{clientData.client_name}
 			</h1>
+			<p class="event-title">
+				{clientData.event_title || 'Wedding Ceremony'}
+			</p>
 		</div>
-		
-		<!-- Right side - QR Scanner -->
-		<div class="w-full md:w-1/2 flex flex-col items-center justify-center space-y-4 p-4 md:p-8">
-			<p class="text-xs sm:text-sm text-white uppercase tracking-wider">SCAN QR</p>
-			
-			{#if errorMessage}
-				<div class="text-center max-w-sm mx-auto">
-					<p class="text-red-500 mb-4 text-sm sm:text-base px-2">{errorMessage}</p>
-					<button
-						class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors text-sm sm:text-base"
-						on:click={() => {
-							errorMessage = '';
-							startScanner();
-						}}
-					>
-						Try Again
-					</button>
-				</div>
-			{:else}
-				<!-- QR Code Scanner -->
-				<div class="relative w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl mx-auto">
-					<div 
-						id="reader" 
-						class="w-full aspect-square max-w-[280px] sm:max-w-[350px] md:max-w-[400px] lg:max-w-[500px] xl:max-w-[600px] mx-auto rounded-lg overflow-hidden"
-					></div>
-				</div>
-				
-				<!-- Instructions for mobile users -->
-				<div class="text-center text-gray-300 text-xs sm:text-sm max-w-sm mx-auto px-4 md:hidden">
-					<p>Position the QR code within the square frame</p>
-				</div>
-			{/if}
+	{/if}
+
+	<!-- Error overlay -->
+	{#if errorMessage}
+		<div class="error-overlay">
+			<div class="error-message">
+				<p>{errorMessage}</p>
+			</div>
+			<button
+				class="retry-button"
+				on:click={() => {
+					errorMessage = '';
+					startScanner();
+				}}
+			>
+				Try Again
+			</button>
 		</div>
-	</div>
+	{/if}
 {/if}

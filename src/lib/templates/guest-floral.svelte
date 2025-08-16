@@ -11,13 +11,15 @@
   import Wishes from '$lib/components/wishes.svelte';
   import { tick } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
+  import { fade } from 'svelte/transition';
 
   // ─── Props ────────────────────────────────────────────────────────────────
  
-  $: eventDateObj = new Date(invite.event_date);
+  // $: eventDateObj = new Date(invite.event_date);
 
   // ─── State Variables ──────────────────────────────────────────────────────
     export let data;
+
 
   if (!data || !data.guest || !data.invite) {
     throw new Error("Missing guest or invite data");
@@ -25,31 +27,40 @@
 
   const invite = data.invite;
   const guest = data.guest;
+  const events = data.events || [];
+  const couple = data.couple;
+
+  
+
+//   console.log('=== DEBUGGING DATA ===');
+// console.log('Full data object:', data);
+// console.log('Invite:', invite);
+// console.log('Invite ID:', invite?.id);
+// console.log('Couple:', couple);
+// console.log('========================');
+
+   
+
+  const primaryEvent = events.length > 0 ? events[0] : null;
+$: eventDateObj = primaryEvent ? 
+  new Date(`${primaryEvent.event_date}T${primaryEvent.start_time || '00:00'}`) : 
+  new Date(invite.event_date);
+  
 $: clientSlug = $page.params.clientSlug;
 $: guestSlug = $page.params.guestSlug;
 
-  let showAccount = false;
+  let showAccount = true;
   let clicked = false;
+  
+let audio;
 
-  let audio;
-
-   let copiedAccounts = {}; // store which account numbers have been copied
+let copiedAccounts = {}; // store which account numbers have been copied
    
-let videoUrl = '';
 
-onMount(() => {
-  const { data: publicData, error } = supabase
-    .storage
-    .from('invites-images')
-    .getPublicUrl(`${clientSlug}/video.webm`);
 
-  if (error) {
-    console.error('Error getting public URL:', error);
-  } else {
-    videoUrl = publicData.publicUrl;
-    console.log('Video URL:', videoUrl);
-  }
-});
+
+
+
 
   // ─── Google Maps Integration ──────────────────────────────────────────────
   const mapsUrl = "https://www.google.com/maps?q=Hotel+Mulia+Senayan,+Jakarta";
@@ -67,64 +78,137 @@ function toGoogleCalendarDate(date) {
 
 const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventTitle)}&dates=${toGoogleCalendarDate(startDateTime)}/${toGoogleCalendarDate(endDateTime)}&location=${encodeURIComponent(location)}&sf=true&output=xml`;
 
-  // ─── Carousel with Swipe + Pause ─────────────────────────────────────────
-  let images = ["/1.jpg", "/2.jpg", "/3.jpg", "/4.jpg", "/5.jpg", "/6.jpg", "/7.jpg", "/8.jpg", "/9.jpg"];
-  let currentIndex1 = 0;
-  let currentIndex2 = 1;
+  // // ─── Carousel with Swipe + Pause ─────────────────────────────────────────
+  // let images = ["/1.jpg", "/2.jpg", "/3.jpg", "/4.jpg", "/5.jpg", "/6.jpg", "/7.jpg", "/8.jpg", "/9.jpg"];
+  // let currentIndex1 = 0;
+  // let currentIndex2 = 1;
 
-  let interval1;
-  let interval2;
-  let resumeTimeout;
-  let startX = 0;
+  // let interval1;
+  // let interval2;
+  // let resumeTimeout;
+  // let startX = 0;
 
-  function startAutoSlide() {
-    clearInterval(interval1);
-    interval1 = setInterval(() => {
-      currentIndex1 = (currentIndex1 + 1) % images.length;
-    }, 2427);
+  // function startAutoSlide() {
+  //   clearInterval(interval1);
+  //   interval1 = setInterval(() => {
+  //     currentIndex1 = (currentIndex1 + 1) % images.length;
+  //   }, 2427);
+  // }
+
+  // function startSecondSlide() {
+  //   clearInterval(interval2);
+  //   interval2 = setInterval(() => {
+  //     currentIndex2 = (currentIndex2 + 1) % images.length;
+  //   }, 3000);
+  // }
+
+  // function handleTouchStart(event) {
+  //   startX = event.touches[0].clientX;
+  // }
+
+  // function handleTouchEnd(event) {
+  //   const endX = event.changedTouches[0].clientX;
+  //   const deltaX = endX - startX;
+
+  //   if (Math.abs(deltaX) > 50) {
+  //     clearInterval(interval1);
+  //     clearTimeout(resumeTimeout);
+
+  //     if (deltaX > 0) {
+  //       currentIndex1 = (currentIndex1 - 1 + images.length) % images.length;
+  //     } else {
+  //       currentIndex1 = (currentIndex1 + 1) % images.length;
+  //     }
+
+  //     resumeTimeout = setTimeout(() => {
+  //       startAutoSlide();
+  //     }, 4000); // Resume after 4 seconds
+  //   }
+  // }
+
+  // onMount(() => {
+  //   startAutoSlide();
+  //   startSecondSlide();
+  // });
+
+  // onDestroy(() => {
+  //   clearInterval(interval1);
+  //   clearInterval(interval2);
+  //   clearTimeout(resumeTimeout);
+  // });
+
+
+let videoUrl = '';
+
+onMount(() => {
+  const { data: publicData, error } = supabase
+    .storage
+    .from('invites-images')
+    .getPublicUrl(`${clientSlug}/video.webm`);
+
+  if (error) {
+    console.error('Error getting public URL:', error);
+  } else {
+    videoUrl = publicData.publicUrl;
+    console.log('Video URL:', videoUrl);
+  }
+});
+
+
+//Carousel for countdown
+
+let images = [];
+let currentIndex = 0;
+
+onMount(async () => {
+  // List files in the specific client folder, not root
+  const { data, error } = await supabase
+    .storage
+    .from('invites-images')
+    .list(clientSlug, { limit: 100 }); // Use clientSlug as the folder path
+    
+  console.log(`Files in ${clientSlug} folder:`, data, error);
+  console.log("Client slug:", clientSlug);
+  
+  if (error) {
+    console.error('Error listing images:', error);
+    return;
   }
 
-  function startSecondSlide() {
-    clearInterval(interval2);
-    interval2 = setInterval(() => {
-      currentIndex2 = (currentIndex2 + 1) % images.length;
-    }, 3000);
+  console.log("Files found in folder:", data);
+
+  if (!data || data.length === 0) {
+    console.warn(`No files found in folder: ${clientSlug}`);
+    return;
   }
+ 
+  const sorted = data
+    .filter(file => /\.(jpe?g|png|webp)$/i.test(file.name))
+    .sort((a, b) => parseInt(a.name) - parseInt(b.name));
 
-  function handleTouchStart(event) {
-    startX = event.touches[0].clientX;
-  }
-
-  function handleTouchEnd(event) {
-    const endX = event.changedTouches[0].clientX;
-    const deltaX = endX - startX;
-
-    if (Math.abs(deltaX) > 50) {
-      clearInterval(interval1);
-      clearTimeout(resumeTimeout);
-
-      if (deltaX > 0) {
-        currentIndex1 = (currentIndex1 - 1 + images.length) % images.length;
-      } else {
-        currentIndex1 = (currentIndex1 + 1) % images.length;
-      }
-
-      resumeTimeout = setTimeout(() => {
-        startAutoSlide();
-      }, 4000); // Resume after 4 seconds
-    }
-  }
-
-  onMount(() => {
-    startAutoSlide();
-    startSecondSlide();
+  images = sorted.map(file => {
+    const { data: publicData } = supabase
+      .storage
+      .from('invites-images')
+      .getPublicUrl(`${clientSlug}/${file.name}`);
+    return publicData.publicUrl;
   });
 
-  onDestroy(() => {
-    clearInterval(interval1);
-    clearInterval(interval2);
-    clearTimeout(resumeTimeout);
-  });
+  console.log("Image URLs:", images);
+
+  if (images.length > 0) startCarousel();
+});
+
+function startCarousel() {
+  setInterval(() => {
+    currentIndex = (currentIndex + 1) % images.length;
+  }, 1500); // change every 3s
+}
+
+//Parse Client Name
+ let clientName = invite.client_name || "";
+  let [name1, name2] = clientName.split(" & ");
+
 
   // ─── Countdown Timer ──────────────────────────────────────────────────────
   let days = 0;
@@ -157,10 +241,12 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
     window.addEventListener('scroll', playAudio, { once: true });
     window.addEventListener('mousemove', playAudio, { once: true });
     window.addEventListener('click', playAudio, { once: true });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
   });
 
   onDestroy(() => {
     clearInterval(intervalTime);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
   });
 
   onMount(() => {
@@ -197,18 +283,28 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
   function playAudio() {
     if (!audio) return;
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => fadeInAudio())
-        .catch((error) => console.warn('Autoplay failed:', error));
-    }
-
-    // Remove once-after interaction listeners
-    window.removeEventListener('scroll', playAudio);
-    window.removeEventListener('mousemove', playAudio);
-    window.removeEventListener('click', playAudio);
+  const playPromise = audio.play();
+  if (playPromise !== undefined) {
+    playPromise
+      .then(() => fadeInAudio())
+      .catch((error) => console.warn('Autoplay failed:', error));
   }
+
+  // Remove once-after interaction listeners
+  window.removeEventListener('scroll', playAudio);
+  window.removeEventListener('mousemove', playAudio);
+  window.removeEventListener('click', playAudio);
+}
+
+// ─── Pause music when tab is hidden ─────────────────────
+function handleVisibilityChange() {
+  if (!audio) return;
+  if (document.hidden) {
+    audio.pause();  // stop music when user leaves tab/browser
+  } else {
+    playAudio();    // resume when they come back
+  }
+}
 
   // ─── Scroll to Devotions Section ─────────────────────────────────────────
   function unlockScrollAndScrollDown() {
@@ -235,23 +331,94 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
   }
 
   // ─── Dress Code Swatches ─────────────────────────────────────────────────
-  const colorSwatches = [
-    '#945C4E', // muted maroon
-    '#A5B8B1', // sage blue
-    '#F7EBD3', // cream
-    '#D8C5A2', // beige
-    '#666E5B', // deep olive
-  ];
+$: colorSwatches = (() => {
+  const eventWithDressCode = events?.find(e => e?.dress_code);
+  if (!eventWithDressCode) return [];
 
+  const raw = String(eventWithDressCode.dress_code || '').trim();
+  if (!raw) return [];
+
+  // If it looks like JSON, try parsing as JSON first
+  if (/^\s*[\[\{]/.test(raw)) {
+    try {
+      const parsed = JSON.parse(raw);
+      const arr = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.colors)
+          ? parsed.colors
+          : [];
+      return normalizeColors(arr);
+    } catch (e) {
+      console.warn('dress_code is not valid JSON, falling back to manual parse:', e);
+    }
+  }
+
+  // Fallback: manual parse for strings like "#945C4E, #AABBCC" or "#fff #000"
+  const cleaned = raw.replace(/[\{\}\[\]]/g, ''); // handle postgres-style arrays etc.
+  const tokens = cleaned.split(/[,;|\n\s]+/).filter(Boolean);
+  return normalizeColors(tokens);
+
+  // Helper: accept #hex, rgb/rgba(), hsl/hsla(), or CSS color names
+  function normalizeColors(list) {
+    const out = [];
+    for (const item of list) {
+      const t = String(item).trim().replace(/['"]/g, '');
+      let color = null;
+
+      const hex = t.match(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+      if (hex) color = `#${hex[1].toUpperCase()}`;
+      else if (/^rgba?\(/i.test(t) || /^hsla?\(/i.test(t)) color = t;
+      else if (/^[a-zA-Z]+$/.test(t)) color = t.toLowerCase();
+
+      if (color) out.push(color);
+    }
+    // de-duplicate
+    return [...new Set(out)];
+  }
+})();
+
+  // Format time from 24-hour to 12-hour format
+function formatTime(time24) {
+  if (!time24) return '';
+  
+  const [hours, minutes] = time24.split(':');
+  const hour = parseInt(hours);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  
+  return `${displayHour}.${minutes} ${ampm}`;
+}
+
+// Format event time range
+function formatEventTimeRange(startTime, endTime) {
+  const start = formatTime(startTime);
+  const end = formatTime(endTime);
+  
+  if (start && end) {
+    return `${start} - ${end}`;
+  } else if (start) {
+    return start;
+  }
+  return '';
+}
 
 
 </script>
 
+<svelte:head>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</svelte:head>
+
+
+
 <style lang="postcss">
   @reference "tailwindcss";
+
+ 
   :global(html) {
-    background-color: theme(--color-gray-100);
+    background-color: #000 !important;
   }
+  
   
   :global(body) {
     margin: 0;
@@ -272,6 +439,164 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
   opacity: 1;
   transform: translateY(0);
 }
+
+.font-subheading {
+    font-family:'SangBleu Regular', sans-serif;
+    font-size:0.75rem;
+    letter-spacing: 0.25em;
+}
+
+.font-display {
+    font-family:'Snell Roundhand', serif;
+    font-size:4.75rem;
+}
+
+.font-display.dresscode{
+    font-family:'Snell Roundhand', serif;
+    font-size:2.25rem;
+}
+
+.font-button {
+  font-family:'DM Sans ExtraBold', sans-serif;
+  font-size:0.75rem;
+  letter-spacing: 0.25em;
+}
+
+.font-h3 {
+  font-family:'SangBleu Light',serif;
+  font-size:1.25rem;
+  letter-spacing:0.025em;
+}
+
+.font-h3.eventtime {
+  font-family:'SangBleu Light',serif;
+  font-size:1rem;
+  margin-top:4px;
+  opacity:90%;
+}
+
+.font-h2 {
+  font-family:'SangBleu Light',serif;
+  font-size:1.75rem;
+  letter-spacing:0.050em;
+}
+
+.font-h2.countdown {
+  font-family:'SangBleu Light',serif;
+  font-size:2.5rem;
+}
+
+.font-p {
+  font-family:'SangBleu Light',serif;
+  font-size:1.75rem;
+}
+
+.font-smallcaption {
+  font-family:'DM Sans Bold', sans-serif;
+  font-size:0.75rem;
+  font-weight:600;
+  opacity:70%;
+  letter-spacing: 0.25em;
+}
+
+.with-love{
+  font-family:'DM Sans Bold', sans-serif;
+  font-size:0.65rem;
+  font-weight:600;
+  
+  letter-spacing: 0.3em;
+}
+
+@media (max-width: 376px) {
+
+  
+
+.landing-section {
+   transform: scale(1);
+    transform-origin: center top; /* Scale from center-top */
+    
+  }
+
+.events-section {
+    transform: scale(0.85); /* 15% smaller (100% - 15% = 85%) */
+    transform-origin: center top; /* Scale from center-top */
+  }
+
+.wishes-section {
+    transform: scale(0.85); /* 15% smaller (100% - 15% = 85%) */
+    transform-origin: center top; /* Scale from center-top */
+}
+
+
+    
+}
+
+
+
+.font-subheading {
+    font-family:'SangBleu Regular', sans-serif;
+    font-size:0.65rem;
+    letter-spacing: 0.25em;
+}
+
+.font-display {
+    font-family:'Snell Roundhand', serif;
+    font-size:4.55rem;
+}
+
+.font-display.dresscode{
+    font-family:'Snell Roundhand', serif;
+    font-size:2.15rem;
+}
+
+.font-button {
+  font-family:'DM Sans ExtraBold', sans-serif;
+  font-size:0.65rem;
+  letter-spacing: 0.25em;
+}
+
+.font-h3 {
+  font-family:'SangBleu Light',serif;
+  font-size:1.15rem;
+  letter-spacing:0.025em;
+}
+
+.font-h3.eventtime {
+  font-family:'SangBleu Light',serif;
+  font-size:0.9rem;
+  margin-top:4px;
+  opacity:90%;
+}
+
+.font-h2 {
+  font-family:'SangBleu Light',serif;
+  font-size:1.65rem;
+  letter-spacing:0.050em;
+}
+
+.font-h2.countdown {
+  font-family:'SangBleu Light',serif;
+  font-size:2.4rem;
+}
+
+.font-p {
+  font-family:'SangBleu Light',serif;
+  font-size:1.65rem;
+}
+
+.font-smallcaption {
+  font-family:'DM Sans Bold', sans-serif;
+  font-size:0.65rem;
+  font-weight:600;
+  opacity:70%;
+  letter-spacing: 0.25em;
+}
+
+
+
+
+
+
 </style>
 
 <audio
@@ -289,16 +614,19 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 <slot />
 
 
-<div class="h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth  ">
+<div class="h-[100dvh]">
 
 <!--Start of Landing Page-->
-<div class="relative w-full min-h-screen overflow-hidden snap-start pb-[env(safe-area-inset-bottom)]
+<div class="relative w-full min-h-[100dvh]
 ">
   <!-- Background image -->
    
  <video
   class="fixed top-0 left-0 w-full h-full object-cover z-[-1]"
-  style="object-position: 65%;"
+  style="   height: 100vh; /* Use vh instead of dvh */
+    min-height: 100vh;
+    background-color: #000;
+    object-position: 65%;"
   autoplay
   muted
   loop
@@ -311,24 +639,26 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 </video>
 
   <!-- Dark overlay -->
-  <div class="fixed top-0 left-0 w-full h-full bg-black/50 z-[-1]"></div>
+  <div class="fixed top-0 left-0 w-full h-[100vh] bg-black/50 z-[-1]"></div>
 
   <!--Introduction-->
-  <div class="relative z-10 flex flex-col items-center justify-center text-center min-h-screen px-4 sm:px-6 gap-20 snap-start fade-in">
+  <div class=" landing-section relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] fade-in">
 
 
-    <p class="font-['Millionaire_Script'] text-base sm:text-lg md:text-xl tracking-[2px] sm:tracking-[4px] text-white ">
-      Dear<br/>{guest.full_name},
+    <p class="font-subheading text-white uppercase pb-30">
+      Dear {guest.full_name},
     </p>
 
-    <div class="flex flex-col items-center justify-center gap-6 sm:gap-8 md:gap-10" >
-      <p class="font-['Jaquel_Regular'] uppercase tracking-[0.35em] sm:tracking-[0.30em] md:tracking-[0.25em] opacity-90 text-white text-[10px] sm:text-[12px]">We Invite You To Celebrate</p>
-        <h1 class="font-['Snell_Roundhand'] text-6xl sm:text-7xl md:text-8xl leading-none text-white">
-        <!-- Eddie <span class="font-['Snell_Roundhand']">& </span>Vania -->
-         {invite.client_name}
+    <div class="flex flex-col items-center justify-center" >
+      <p class="font-subheading uppercase text-white pb-10">
+      We Invite You To Celebrate</p>
+        <h1 class="font-display text-white rotate-[-6deg] text-center leading-none pb-10">
+          <p class="m-0">{name1}</p>
+          <p class="-m-3">&</p>
+          <p class="m-0">{name2}</p>
         </h1>
 
-      <p class="font-['Jaquel_Regular'] uppercase tracking-[0.35em] sm:tracking-[0.30em] md:tracking-[0.25em] opacity-90 text-white text-[10px] sm:text-[12px]">
+      <p class="font-subheading uppercase text-white pb-20">
   {eventDateObj.toLocaleDateString('en-US', {
     weekday: 'long',
     day: 'numeric',
@@ -340,7 +670,7 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
     <button
        on:click={unlockScrollAndScrollDown}
-      class="font-caption tracking-[0.15em] sm:tracking-[0.22em] px-4 sm:px-6 py-2 border border-white rounded-full hover:bg-white hover:text-black transition text-xs sm:text-sm"    >
+      class="font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition text-xs sm:text-sm"    >
       JOIN THE CELEBRATION
     </button>
   </div>
@@ -351,14 +681,14 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
 <!--Devotions-->
 {#if invite.section_toggle.includes("devotions")}
-<div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-screen px-4 sm:px-6 space-y-8 sm:space-y-12 snap-start"> 
+<div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-4 sm:px-6 space-y-8 sm:space-y-12 "> 
       <img src="/cross.png" alt="cross" class="w-4 h-5 sm:w-3 sm:h-4 object-fill opacity-80 fade-in ">
-      <h1 class="font-['Millionaire_Roman'] text-2xl sm:text-3xl md:text-4xl mt-0 mb-4 sm:mb-6 md:mb-8 px-4 fade-in " style="color: #FAFAEF;">I have found the one whom my soul loves.</h1>
-      <p class="font-caption font-bold uppercase tracking-[1em] sm:tracking-[1.5em] md:tracking-[2em] opacity-90 text-xs sm:text-sm fade-in " style="color: #FAFAEF;">SONG OF SOLOMON 3:4</p>
+      <h1 class="font-h2 text-white fade-in ">I have found the one whom my soul loves.</h1>
+      <p class="font-smallcaption font-bold text-white uppercase tracking-[1em] sm:tracking-[1.5em] md:tracking-[2em] opacity-90 text-xs sm:text-sm fade-in ">SONG OF SOLOMON 3:4</p>
     <div class="absolute bottom-40 left-1/2 -translate-x-1/2 w-20 h-20 flex justify-center items-center fade-in ">
-      <div class="scale-50 opacity-80">
+      <!-- <div class="scale-50 opacity-80">
         <LottieClientOnly {arrowDown} />
-      </div>
+      </div> -->
     </div>
   
 </div>
@@ -367,7 +697,7 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
 <!--Couple-->
 {#if invite.section_toggle.includes("groom-intro")}
-<div class="relative flex flex-col items-center snap-start">
+<div class="relative flex flex-col items-center ">
   <div class="absolute inset-0 bg-black/15 z-[5]"></div>
 
   <!-- Background image -->
@@ -381,7 +711,7 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
     <div class="flex items-center space-x-4 mb-4">
       <img src="/deco1.png" alt="Left Deco" class="w-10 sm:w-14">
-      <h4 class="font-caption uppercase text-xs sm:text-sm">THE GROOM</h4>
+      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">THE GROOM</h4>
       <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
     </div>
 
@@ -391,7 +721,7 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
     </h2>
 
     <div class="flex flex-col items-center space-y-">
-      <h4 class="font-caption uppercase text-xs sm:text-sm">
+      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">
        {invite.groom_parents}
       </h4>
       <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
@@ -401,7 +731,7 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 {/if}
 
 {#if invite.section_toggle.includes("bride-intro")}
-<div class="relative flex flex-col items-center snap-start">
+<div class="relative flex flex-col items-center ">
   <div class="absolute inset-0 bg-black/15 z-[5]"></div>
 
   <!-- Background image -->
@@ -415,7 +745,7 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
     <div class="flex items-center space-x-4 mb-4">
       <img src="/deco1.png" alt="Left Deco" class="w-10 sm:w-14">
-      <h4 class="font-caption uppercase text-xs sm:text-sm">THE BRIDE</h4>
+      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">THE BRIDE</h4>
       <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
     </div>
 
@@ -425,7 +755,7 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
     </h2>
 
     <div class="flex flex-col items-center space-y-">
-      <h4 class="font-caption uppercase text-xs sm:text-sm">
+      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">
        {invite.bride_parents}
       </h4>
       <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
@@ -437,58 +767,66 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
 
 <!-- Events -->
-<div class="flex flex-col items-start justify-center text-left px-8 sm:px-10 md:px-12 py-10 sm:py-12 md:py-14 space-y-6 sm:space-y-8 md:space-y-10 bg-transparent text-white snap-start">
-  {#if invite.section_toggle.includes("holy-matrimony")}
-  <!-- Holy Matrimony -->
-  <div class="space-y-4 sm:space-y-6 md:space-y-8 w-full fade-in">
-    <p class="uppercase text-xs sm:text-[8px] mb-8 font-caption opacity-80">Event</p>
-    <h2 class="text-3xl sm:text-4xl md:text-5xl font-['Sangbleu_King']">Holy Matrimony</h2>
-    <hr class="mt-[-6px] sm:mt-[-8px] md:mt-[-10px]">
-      <div class="">
-        <p class="text-lg sm:text-xl md:text-2xl font-['Sangbleu_Regular']">Sunday, 8 August 2026</p>
-        <p class="text-lg sm:text-xl md:text-2xl font-['Sangbleu_Light']">11.00 AM - 13.00 PM</p>
+
+<div class="flex flex-col events-section min-h-[100dvh] items-center justify-center text-center px-8 sm:px-10 md:px-12 py-10 sm:py-12 md:py-14 text-white ">
+  {#each events as event, index}
+    <!-- Check if this event type should be shown based on section_toggle -->
+    {#if invite.section_toggle.includes(event.event_type) || invite.section_toggle.includes("events")}
+      <div class="mb-14 w-full fade-in" class:mb-12={index === events.length - 1}>
+        
+        <!-- Show "Event" label only for the first event -->
+        {#if index === 0}
+          <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
+        {/if}
+        
+        <!-- Dynamic Event Title -->
+          
+        <h2 class="font-h2 mb-3 capitalize">
+          {event.event_type.replace('-', ' ')}
+        </h2>
+        <hr class="mb-6 border-t-2 border-white/50">
+        
+        <!-- Dynamic Date and Time -->
+        <div class="">
+          <p class="font-h3">
+            {new Date(event.event_date).toLocaleDateString('en-US', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric'
+            })}
+          </p>
+          <p class="font-h3 eventtime mb-6">
+            {formatEventTimeRange(event.start_time, event.end_time)}
+          </p>
+        </div>
+        
+        <!-- Dynamic Location -->
+        <p class="font-h3 sm:text-xl md:text-2xl mb-6">
+          {event.location}
+        </p>
+        
+        <!-- Dynamic Location Button -->
+        <a  
+          href="https://www.google.com/maps?q={encodeURIComponent(event.location)}"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
+        >
+          + View Location
+        </a>
       </div>
-    <p class="text-lg sm:text-xl md:text-2xl font-['Sangbleu_Regular']">
-      The Grand Ballroom<br />
-      Hotel Mulia Senayan, Jakarta
-    </p>
-    
-    <!-- Location Button -->
-    <a
-      href={mapsUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      class="inline-block mt-4 mb-12 px-6 sm:px-8 py-3 uppercase border border-white text-white text-xs sm:text-sm  font-caption tracking-[0.15em] sm:tracking-[0.2em] hover:bg-white hover:text-black transition"
-    >
-      + View Location
-    </a>
-  </div>
-{/if}
-
-{#if invite.section_toggle.includes("wedding-reception")}
-  <!-- Wedding Reception -->
-  <div class="space-y-4 sm:space-y-6 md:space-y-8 w-full fade-in">
-    <h2 class="text-3xl sm:text-4xl md:text-5xl font-['Sangbleu_King']">Wedding Reception</h2>
-    <hr class="mt-[-6px] sm:mt-[-8px] md:mt-[-10px]">
-    <div class="">
-      <p class="text-lg sm:text-xl md:text-2xl font-['Sangbleu_Regular']">Sunday, 8 August 2026</p>
-      <p class="text-lg sm:text-xl md:text-2xl font-['Sangbleu_Light']">11.00 AM - 13.00 PM</p>
+    {/if}
+  {/each}
+  
+  <!-- Fallback: Show message if no events match section_toggle -->
+  {#if events.length === 0 || !events.some(event => invite.section_toggle.includes(event.event_type))}
+    <div class="w-full fade-in">
+      <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
+      <h2 class="font-h2 mb-2">Coming Soon</h2>
+      <hr class="mb-6">
+      <p class="font-h3">Event details will be updated soon.</p>
     </div>
-    <p class="text-lg sm:text-xl md:text-2xl font-['Sangbleu_Regular']">
-      The Grand Ballroom<br />
-      Hotel Mulia Senayan, Jakarta
-    </p>
-
-    <!-- Location Button -->
-    <a
-      href={mapsUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      class="inline-block mt-4 mb-12 px-6 sm:px-8 py-3 uppercase border border-white text-white text-xs sm:text-sm  font-caption tracking-[0.15em] sm:tracking-[0.2em] hover:bg-white hover:text-black transition"
-    >
-      + View Location
-    </a>
-  </div>
   {/if}
 </div>
 
@@ -497,41 +835,49 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
 {#if invite.section_toggle.includes("countdown")}
 <!--Countdown-->
-<div class="relative z-10 flex flex-col items-center justify-center text-center min-h-screen px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16 snap-start">
-  <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22 fade-in" style="color: #FAFAEF;">Until Our Celebration</h1>
-  <img src="/1.jpg" alt="First image1" class="max-h-[35vh] sm:max-h-[40vh] md:max-h-[50vh] w-auto max-w-[80%] sm:max-w-[70%] md:max-w-[60%] object-contain mx-auto">
-<div class="flex justify-center fade-in">
-  <div class="grid grid-cols-4 gap-2 sm:gap-3 md:gap-4 text-center justify-center items-center">
+<div class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16 ">
+  <h1 class="font-h2 text-white mb-10 sm:mb-14 md:mb-22 fade-in">Until Our Celebration</h1>
+  {#if images.length > 0}
+    <img
+      src={images[currentIndex]}
+      alt="Countdown slideshow"
+      class="mb-10 max-h-[35vh] sm:max-h-[40vh] md:max-h-[50vh] w-auto max-w-[80%] sm:max-w-[70%] md:max-w-[60%] object-contain mx-auto transition-opacity duration-700"
+    />
+  {:else}
+    <p class="font-smallcaption text-white">Loading images...</p>
+  {/if}
+<div class="flex justify-center mb-12 fade-in">
+  <div class="grid grid-cols-4 gap-6 text-center justify-center items-center">
     <!-- Days -->
     <div class="flex flex-col items-center">
       
-        <div class="font-['Millionaire_Roman'] text-4xl sm:text-2xl md:text-3xl leading-none mb-4 sm:mb-5 md:mb-6 text-white" >{days}</div>
+        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white" >{days}</div>
       
-      <div class="font-caption font-bold uppercase tracking-[0.4em] sm:tracking-[0.6em] md:tracking-[0.8em] opacity-90 text-white text-xs sm:text-sm">Days</div>
+      <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Days</div>
     </div>
 
     <!-- Hours -->
     <div class="flex flex-col items-center">
       
-        <div class="font-['Millionaire_Roman'] text-4xl sm:text-2xl md:text-3xl leading-none mb-4 sm:mb-5 md:mb-6 text-white">{hours.toString().padStart(2, '0')}</div>
+        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{hours.toString().padStart(2, '0')}</div>
       
-      <div class="font-caption font-bold uppercase tracking-[0.4em] sm:tracking-[0.6em] md:tracking-[0.8em] opacity-90 text-white text-xs sm:text-sm">Hours</div>
+      <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Hours</div>
     </div>
 
     <!-- Minutes -->
     <div class="flex flex-col items-center">
       
-        <div class="font-['Millionaire_Roman'] text-4xl sm:text-2xl md:text-3xl leading-none mb-4 sm:mb-5 md:mb-6 text-white">{minutes.toString().padStart(2, '0')}</div>
+        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{minutes.toString().padStart(2, '0')}</div>
       
-      <div class="font-caption font-bold uppercase tracking-[0.4em] sm:tracking-[0.6em] md:tracking-[0.8em] opacity-90 text-white text-xs sm:text-sm">Minutes</div>
+      <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Mins</div>
     </div>
 
     <!-- Seconds -->
     <div class="flex flex-col items-center">
       
-        <div class="font-['Millionaire_Roman'] text-4xl sm:text-2xl md:text-3xl leading-none mb-4 sm:mb-5 md:mb-6 text-white">{seconds.toString().padStart(2, '0')}</div>
+        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{seconds.toString().padStart(2, '0')}</div>
       
-      <div class="font-caption font-bold uppercase tracking-[0.4em] sm:tracking-[0.6em] md:tracking-[0.8em] opacity-90 text-white text-xs sm:text-sm">Seconds</div>
+      <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Secs</div>
     </div>
   </div>
 </div>
@@ -539,7 +885,7 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
     href={calendarUrl}
     target="_blank"
     rel="noopener noreferrer"
-    class="inline-block mt-4 px-4 sm:px-6 py-2 uppercase border border-white text-white text-xs sm:text-sm rounded-full font-caption tracking-[0.15em] sm:tracking-[0.2em] hover:bg-white hover:text-black transition"
+    class="inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
   >
     + Save the Date
   </a>
@@ -549,15 +895,16 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
 
 <!-- RSVP -->
-<div class="relative w-full min-h-screen snap-start">  
+<div class="">  
 
-    
+
   <PersonalRsvp 
   guestSlug={$page.params.guestSlug} 
   guest={data.guest}
   invite={data.invite}
 />
    
+ 
 </div>
 <!-- End of RSVP -->
 
@@ -565,7 +912,7 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
 <!-- Wishes -->
  {#if invite.section_toggle.includes("wishes")}
-<div class="relative w-full min-h-screen overflow-hidden snap-start">
+<div class="relative w-full min-h-[100dvh] wishes-section overflow-hidden ">
   <div class="fade-in">
   <Wishes />
 </div>
@@ -577,19 +924,20 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
 <!-- Dress Code -->
   {#if invite.section_toggle.includes("dress-code")}
-<div class="relative w-full min-h-screen overflow-hidden snap-start">
+<div class="relative w-full min-h-[100dvh] z-10 flex flex-col items-center justify-center text-center px-6  overflow-hidden ">
   <div class="fade-in">
-  
+ 
   <!-- Content overlay -->
-  <div class="relative z-10 min-h-screen flex flex-col items-center justify-center text-center text-white px-6 space-y-8">
-    <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Dress Code</h1>
-    <h1 class="font-['Millionaire_Roman'] text-2xl">“Garden Party Formal”</h1>
-    <p class="font-caption uppercase text-xs sm:text-sm leading-relaxed">
-      We kindly request our guests <br> to wear these colors for <br> our special day.
+  <div class="  text-white ">
+     <p class="font-smallcaption uppercase opacity-80 mb-6">WHAT TO WEAR</p>
+    <!-- <h1 class="font-h2 mb-3">Dress Code</h1> -->
+
+    <p class="font-h2 text-white mb-6">
+      We kindly request our guests to wear these colors for our special day.
     </p>
 
     <!-- Swatches -->
-    <div class="flex justify-center space-x-4 pt-2">
+    <div class="flex justify-center space-x-4 pt-2 mb-12">
       {#each colorSwatches as color}
         <div
           class="w-10 h-10 rounded-full shadow-lg"
@@ -597,18 +945,46 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
         />
       {/each}
     </div>
-  </div>
-</div>
+    </div>
+    </div>
+    <a 
+        href="https://www.instagram.com/reel/DMAlgiSTamH/?igsh=MWwya2NxMnB6bTB4dw=="
+        target="_blank"
+        rel="noopener noreferrer"
+        class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
+      >
+        View Inspiration
+      </a>
+  
+
 </div>
 {/if}
 <!-- End of Dress Code -->
 
-
+<!-- Rundown -->
+<div class="relative w-full min-h-[100dvh] overflow-hidden ">
+  <div class="fade-in">
+    <div class="relative z-10 min-h-[100dvh] flex flex-col items-center justify-center text-center text-white px-6 space-y-8">
+      <p class="font-smallcaption uppercase opacity-80 mb-6">EVENT RUNDOWN</p>
+      <h1 class="font-h2 text-white mb-12">See everything we've got planned for you.<br><br>View our full event rundown below</h1>
+      
+      <a 
+        href="https://www.notion.so/Wedding-FAQ-152f5ed90e1447c89e5a76be413f07c7?source=copy_link"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
+      >
+        View FAQ
+      </a>
+    </div>
+  </div>
+</div>
 
 <!-- Our Moments -->
   {#if invite.section_toggle.includes("our-moments")}
-<div class="relative z-10 flex flex-col items-center justify-center text-center h-screen px-4 sm:px-6 space-y-6 sm:space-y-8 snap-start">
+<div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white ">
   <div class="fade-in">
+    
   <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Our Moments</h1>
 <div class="flex flex-col items-center justify-center w-full mx-auto my-6 sm:my-8 md:my-10 px-4 z-10">
     
@@ -638,13 +1014,15 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
  {#if invite.section_toggle.includes("wedding-gift")}
 <!-- Wedding Gift-->
-  <div class="relative z-10 flex flex-col items-center justify-center text-center h-screen px-4 sm:px-6 space-y-6 sm:space-y-8 snap-start  fade-in">
-  <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">A Token of Love</h1>
-  <h4 class="font-caption uppercase text-xs sm:text-sm px-2">FOR GUESTS WHO WOULD LIKE TO OFFER A GIFT OF LOVE TO THE COUPLE, <br><br> PLEASE FIND THE ACCOUNT BELOW: </h4>
+  <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white  fade-in">
+    <p class="font-smallcaption uppercase opacity-80 mb-6">WEDDING GIFT</p>
+  <h1 class="font-h2">A Token of Love</h1>
+
+  <h4 class="font-h3 eventtime leading-3 mb-8">For those who wish to offer us a gift of love, <br><br> please find the account details below: </h4>
     
       <button
         on:click={() => (showAccount = !showAccount)}
-        class={`inline-block mt-4 px-4 sm:px-6 py-2 uppercase text-xs sm:text-sm rounded-full font-caption tracking-[0.15em] sm:tracking-[0.2em] transition duration-300 ease-in-out 
+        class={`inline-block mt-4 px-8 py-4 uppercase text-xs sm:text-sm rounded font-button tracking-[0.15em] transition duration-300 ease-in-out 
           ${showAccount 
             ? 'bg-white border-transparent' 
             : 'bg-transparent text-white border border-white hover:bg-white hover:text-black'}`}
@@ -654,21 +1032,21 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
       </button>
 
             {#if showAccount}
-  <div class="mt-6 px-4 sm:px-6 py-6 text-white text-center w-full max-w-sm mx-auto">
+  <div class=" px-4 sm:px-6 py-6 text-white text-center w-full max-w-sm mx-auto">
    
 
-     <!-- Eddie -->
+     <!-- Groom Account -->
     <div class="mb-5 border-t border-white/20 pt-4 text-left space-y-1">
       <div class="flex justify-between items-center">
         <div>
-          <p class="text-1xl font-caption font-bold uppercase tracking-wide">Eddie Cheng</p>
-          <p class="font-caption uppercase">Bank: BCA</p>
-          <p class="text-4xl font-['Sangbleu-King'] tracking-wider mt-2 opacity-90">0898812888</p>
+          <p class="font-smallcaption !opacity-100 !text-white uppercase">{couple?.groom_bank_name|| '-'}</p>
+          <p class="font-button uppercase">Bank:{couple?.groom_bank || '-'}</p>
+          <p class="font-h2 tracking-wider mt-2 opacity-90">{couple?.groom_bank_number || '-'}</p>
         </div>
         <button
-          on:click={() => copyAccountNumber('0898812888')}
-          class="font-caption font-bold uppercase border text-center border-white px-4 py-2 hover:bg-white hover:text-black transition"
-        > {#if copiedAccounts["0898812888"]}
+          on:click={() => copyAccountNumber(couple.groom_bank_number)}
+          class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition"
+        > {#if copiedAccounts[couple.groom_bank_number]}
         ✓
       {:else}
         Copy
@@ -677,19 +1055,19 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
       </div>
     </div>
 
-    <!-- Vania -->
+    <!-- Bride Account -->
     <div class="border-t border-white/20 pt-4 text-left space-y-1">
       <div class="flex justify-between items-center">
         <div>
-          <p class="text-1xl font-caption font-bold uppercase tracking-wide">Vania Halim</p>
-          <p class="font-caption uppercase">Bank: BCA</p>
-          <p class="text-4xl font-['Sangbleu-King'] tracking-wider mt-2 opacity-90">0891288899</p>
+          <p class="font-smallcaption !opacity-100 !text-white uppercase">{couple?.bride_bank_name || '-'}</p>
+          <p class="font-smallcaption !opacity-100 !text-white uppercase">Bank:{couple?.bride_bank || '-'}</p>
+          <p class="font-h2 tracking-wider mt-2 opacity-90">{couple?.bride_bank_number || '-'}</p>
         </div>
         <button
-          on:click={() => copyAccountNumber('0891288899')}
-          class="font-caption font-bold uppercase border text-center border-white px-4 py-2 hover:bg-white hover:text-black transition"
+          on:click={() => copyAccountNumber(couple.bride_bank_number)}
+          class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition"
         >
-          {#if copiedAccounts["0891288899"]}
+          {#if copiedAccounts[couple.bride_bank_number]}
         ✓
       {:else}
         Copy
@@ -706,15 +1084,32 @@ const calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text
 
  {#if invite.section_toggle.includes("thank-you")}
 <!--Thank you-->
-  <div class="relative flex flex-col items-center snap-start w-full h-screen  fade-in">
-      <div class="absolute inset-0 bg-black/50 z-[5]"></div>
-      <img src="/thankyou.gif" alt="First image1" class="w-full h-full object-cover">
-      <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-2 sm:space-y-3 p-6 sm:p-8 md:p-10">
-        <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Thank You</h1>
-        <h4 class="font-caption uppercase text-xs sm:text-sm leading-relaxed">THANK YOU FOR YOUR SUPPORT AND PRESENCE, WE ARE DEEPLY HONORED AND GRATEFUL. <br><br> YOUR SUPPORT AND KIND WISHES MEAN THE WORLD TO US. WE CAN'T WAIT TO SEE YOU AND CELEBRATE LOVE, TOGETHER. <br><br>LOVE, ED & VAN</h4>
-      </div>
+ <div class="relative flex flex-col items-center w-full h-[100dvh] fade-in">
+  <div class="absolute inset-0 bg-black opacity-0 z-[5] transition-opacity duration-1000 ease-in"></div>
+  
+  <div class="absolute inset-0 flex flex-col items-center text-center text-white z-10 p-6 sm:p-8 md:p-10">
+    <!-- Centered content -->
+    <div class="flex-1 flex flex-col items-center justify-center space-y-3 sm:space-y-4">
+      <p class="font-smallcaption uppercase opacity-80 mb-6">A Big Thank You</p>
+      <h1 class="font-h2 mb-6">See You Soon!</h1>
+      <h4 class="font-h3 eventtime">
+        {@html (couple?.thank_you || '-').replace(/\n/g, '<br><br>')}
+      </h4>
+    </div>
+
+    <!-- Bottom "With Love" -->
+    <div class="absolute bottom-12 flex flex-col items-center space-y-0.5">
+      <p class="font-smallcaption uppercase">Invites From</p>
+      <a 
+        href="https://startswithlove.com" 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        class="with-love opacity-90 !text-white uppercase  hover:text-gray-300 transition"
+      >
+        STARTSWITHLOVE.COM
+      </a>
+    </div>
   </div>
+</div>
   {/if}
 </div>
-
-

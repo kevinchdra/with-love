@@ -1,19 +1,22 @@
 @import "tailwindcss";
 
-@font-face {
-  font-family: 'Millionaire Roman';
-  src: url('/fonts/Millionaire-Rom.woff2') format('woff2');
-  font-weight: 700;
-  font-style: normal;
+@font-face{
+  font-family: 'DM Sans ExtraBold';
+  src: url('/fonts/DMSans-ExtraBold.ttf') format('truetype');
+  font-weight: 800;
 }
 
-@font-face {
-  font-family: 'Millionaire Script';
-  src: url('/fonts/Millionaire-Scr.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
+@font-face{
+  font-family: 'DM Sans Bold';
+  src: url('/fonts/DMSans-Bold.ttf') format('truetype');
+  font-weight: 800;
 }
 
+@font-face{
+  font-family: 'DM Sans Regular';
+  src: url('/fonts/DMSans-Regular.ttf') format('truetype');
+  font-weight: 500;
+}
 
 @font-face {
   font-family: 'Sangbleu King';
@@ -73,12 +76,7 @@
 }
 
 @layer utilities {
-  .font-caption{
-     font-family: "Raleway", ui-sans-serif, system-ui, sans-serif;
-    font-size: 0.8rem; 
-    letter-spacing: 0.25em; /* 5% tracking */
-    color:aliceblue;
-  }
+ 
 
   .font-countdowntime{
     font-family:"Inter", ui-sans-serif, system-ui, sans-serif;
