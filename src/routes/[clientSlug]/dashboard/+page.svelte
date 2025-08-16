@@ -58,10 +58,6 @@ let selectedGiftGroups = new Set();
 // MODAL STATE
 // ============================================================================
 
-// Guest Modals
-let showAddGuestModal = false;
-let showDeleteConfirmation = false;
-let isDeleting = false;
 
 // Gift Modals
 let showAddGiftModal = false;
@@ -72,7 +68,7 @@ let editingGift = null;
 
 // Message Modals
 let showMessagePreviewModal = false;
-let showCustomMessageModal = false;
+
 let showSettingsModal = false;
 
 // Settings Modal
@@ -92,7 +88,7 @@ const giftPerPage = 10;
 // ============================================================================
 // METRICS CONFIGURATION
 // ============================================================================
-let metricsView = 'count'; // 'count' or 'percent' 
+
 let selectedMetrics = {
     invitesSent: { mode: 'count' },
     invitesNotSent: { mode: 'count' },
@@ -150,12 +146,11 @@ let tempMessageTemplates = { ...messageTemplates };
 // MESSAGE PREVIEW STATE
 // ============================================================================
 let previewMessage = '';
-let customMessage = '';
+
 let selectedGuestForPreview = null;
-let selectedGuestForCustomMessage = null;
-let selectedGiftGroupForPreview = null;
+
 let messageType = '';
-let customMessageType = '';
+
 
 // ============================================================================
 // FORM STATE
@@ -226,7 +221,8 @@ async function loadDashboardData() {
             .from('invites')
             .select('*')
             .eq('slug', clientSlug)
-            .single();
+            .single()
+            
             
         if (inviteError || !invite) {
             errorMessage = 'Client not found';
@@ -253,7 +249,8 @@ async function loadDashboardData() {
             .from('guests')
             .select('*')
             .eq('invite_id', invite.id)
-            .order('full_name');
+            .order('full_name')
+            .range(0, 49);
             
         if (guestError) {
             errorMessage = 'Failed to load guest data';
@@ -3011,9 +3008,10 @@ onMount(async () => {
                                     <td>
                                         <div 
                                             class="name-cell" 
-                                            style="font-weight: 500;"  on:mouseenter={handleRowMouseEnter}
+                                            style="font-weight: 500;">
+                                            <!--on:mouseenter={handleRowMouseEnter}
                                     on:mousemove={handleRowMouseMove}
-                                    on:mouseleave={handleRowMouseLeave}>
+                                    on:mouseleave={handleRowMouseLeave}-->
                                             {guest.full_name || 'N/A'}
                                         </div>
                                         {#if guest.email}
