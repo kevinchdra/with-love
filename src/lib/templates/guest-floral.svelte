@@ -54,6 +54,17 @@
     return date.toISOString().replace(/-|:|\.\d\d\d/g, '');
   }
 
+
+//Parse Wedding Gift Note
+function parseFormatting(text) {
+  if (!text) return '';
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // **bold**
+    .replace(/\*(.*?)\*/g, '<em>$1</em>');             // *italic*
+}
+
+$: formattedGiftNote = parseFormatting(couple.wedding_gift_note);
+
   /**
    * Creates a Google Calendar URL for a single event with timezone handling
    */
@@ -333,28 +344,70 @@
   }
 
   // ─── Scroll to Devotions Section ─────────────────────────────────────────
-  function unlockScrollAndScrollDown() {
-    const el = document.getElementById('devotions');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
+function unlockScrollAndScrollDown() {
+  const targetY = window.innerHeight;
+  const startY = window.pageYOffset;
+  const distance = targetY - startY;
+  const duration = 1000; // milliseconds
+  let startTime = null;
+
+  function smoothScroll(currentTime) {
+    if (startTime === null) startTime = currentTime;
+    const timeElapsed = currentTime - startTime;
+    const progress = Math.min(timeElapsed / duration, 1);
+    
+    // Ease-out function for smooth deceleration
+    const ease = 1 - Math.pow(1 - progress, 3);
+    
+    window.scrollTo(0, startY + (distance * ease));
+    
+    if (progress < 1) {
+      requestAnimationFrame(smoothScroll);
     }
   }
+  
+  requestAnimationFrame(smoothScroll);
+}
 
   // ─── Account Copy ─────────────────────────────────────────────────────────
   async function copyAccountNumber(number) {
-    try {
-      await navigator.clipboard.writeText(number);
-      copiedAccounts[number] = true;
-      await tick(); // wait for DOM to update
+  try {
+    await navigator.clipboard.writeText(number);
+    copiedAccounts[number] = true;
+    await tick(); // wait for DOM to update
 
-      // Reset after 2 seconds
+    // Reset after 2 seconds
+    setTimeout(() => {
+      copiedAccounts[number] = false;
+    }, 2000);
+  } catch (err) {
+    console.error("Clipboard API failed, trying fallback:", err);
+    
+    // Fallback method for mobile/older browsers
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = number;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      copiedAccounts[number] = true;
+      await tick();
+      
       setTimeout(() => {
         copiedAccounts[number] = false;
       }, 2000);
-    } catch (err) {
-      console.error("Copy failed", err);
+    } catch (fallbackErr) {
+      console.error("All copy methods failed:", fallbackErr);
+      alert(`Copy failed. Number: ${number}`);
     }
   }
+}
 
   // ─── Dress Code Swatches ─────────────────────────────────────────────────
   $: colorSwatches = (() => {
@@ -553,9 +606,17 @@
     letter-spacing: 0.25em;
   }
 
+   .font-smallcaption.with-love {
+    font-family:'DM Sans Regular', sans-serif;
+    font-size:0.65rem;
+    font-weight:600;
+    opacity:70%;
+    letter-spacing: 0.25em;
+  }
+
   .with-love{
     font-family:'DM Sans Bold', sans-serif;
-    font-size:0.65rem;
+    font-size:0.7rem;
     font-weight:600;
     letter-spacing: 0.3em;
   }
@@ -599,12 +660,12 @@
     }
 
     .events-section {
-      transform: scale(0.85);
+      transform: scale(0.9);
       transform-origin: center top;
     }
 
     .wishes-section {
-      transform: scale(0.85);
+      transform: scale(0.9);
       transform-origin: center top;
     }
 
@@ -876,7 +937,7 @@
 <!--End of Couple-->
 
 <!-- Events -->
-<div class="flex flex-col events-section min-h-[100dvh] items-center justify-center text-center px-12 md:px-22 lg:px-32 py-10 text-white">
+<div class="flex flex-col events-section min-h-[100dvh] items-center justify-center text-center px-8 md:px-16 lg:px-28 py-10 text-white">
   {#each events as event, index}
     <!-- Check if this event type should be shown based on section_toggle -->
     {#if invite.section_toggle.includes(event.event_type) || invite.section_toggle.includes("events")}
@@ -1049,7 +1110,7 @@
 
 <!-- Dress Code -->
 {#if invite.section_toggle.includes("dress-code")}
-<div class="relative w-full min-h-[100dvh] z-10 flex flex-col items-center justify-center text-center px-12 md:px-22 lg:px-32 overflow-hidden">
+<div class="relative w-full min-h-[100dvh] z-10 flex flex-col items-center justify-center text-center px-8 md:px-16 lg:px-28 overflow-hidden">
   <div class="fade-in">
     <!-- Content overlay -->
     <div class="text-white">
@@ -1128,7 +1189,7 @@
 
 {#if invite.section_toggle.includes("wedding-gift")}
 <!-- Wedding Gift-->
-<div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white fade-in">
+<div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-8 md:px-16 lg:px-28  space-y-6 sm:space-y-8 text-white fade-in">
   <p class="font-smallcaption uppercase opacity-80 mb-6">WEDDING GIFT</p>
   <h1 class="font-h2">A Token of Love</h1>
 
@@ -1138,8 +1199,8 @@
     on:click={() => (showAccount = !showAccount)}
     class={`inline-block mt-4 px-8 py-4 uppercase text-xs sm:text-sm rounded font-button tracking-[0.15em] transition duration-300 ease-in-out 
       ${showAccount 
-        ? 'bg-white border-transparent' 
-        : 'bg-transparent text-white border border-white hover:bg-white hover:text-black'}`}
+        ? 'bg-[#C7DDD8] border-transparent' 
+        : 'bg-transparent text-white border border-white hover:bg-[#b5d0c9] hover:text-black'}`}
     style={showAccount ? 'color: #000000 !important;' : ''}
   >
     {showAccount ? "- HIDE ACCOUNT" : "+ VIEW ACCOUNT"}
@@ -1157,7 +1218,7 @@
           </div>
           <button
             on:click={() => copyAccountNumber(couple.groom_bank_number)}
-            class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition"
+            class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-[#b5d0c9] hover:text-black transition"
           > 
             {#if copiedAccounts[couple.groom_bank_number]}
               ✓
@@ -1237,7 +1298,7 @@
   <!-- Background image -->
   <video
     class="fixed top-0 left-0 w-full h-full object-cover z-[-1]"
-    style="height: 100vh; min-height: 100vh; background-color: #000; object-position: 65%;"
+    style="height: 100%; min-height: 100%; background-color: #000; object-position: 65%;"
     autoplay
     muted
     loop
@@ -1250,7 +1311,7 @@
   </video>
 
   <!-- Dark overlay -->
-  <div class="fixed top-0 left-0 w-full h-[100vh] bg-black/50 z-[-1]"></div>
+  <div class="fixed top-0 left-0 w-full h-full bg-black/50 z-[-1]"></div>
 
   <!--Introduction-->
   <div class="landing-section relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] fade-in">
@@ -1624,14 +1685,14 @@
   <p class="font-smallcaption uppercase opacity-80 mb-6">WEDDING GIFT</p>
   <h1 class="font-h2">A Token of Love</h1>
 
-  <h4 class="font-h3 eventtime leading-3 mb-8">For those who wish to offer us a gift of love, <br><br> please find the account details below: </h4>
-  
+  <!-- <h4 class="font-h3 eventtime leading-3 mb-8">For those who wish to offer us a gift of love, <br><br> please find the account details below: </h4> -->
+  <h4 class="font-h3 eventtime leading-6 mb-8">{@html formattedGiftNote}</h4>
   <button
     on:click={() => (showAccount = !showAccount)}
     class={`inline-block mt-4 px-8 py-4 uppercase text-xs sm:text-sm rounded font-button tracking-[0.15em] transition duration-300 ease-in-out 
       ${showAccount 
-        ? 'bg-white border-transparent' 
-        : 'bg-transparent text-white border border-white hover:bg-white hover:text-black'}`}
+        ? 'bg-[#C7DDD8] border-transparent' 
+        : 'bg-transparent text-white border border-white hover:bg-[#C7DDD8] hover:text-black'}`}
     style={showAccount ? 'color: #000000 !important;' : ''}
   >
     {showAccount ? "- HIDE ACCOUNT" : "+ VIEW ACCOUNT"}
@@ -1703,7 +1764,7 @@
 
     <!-- Bottom "With Love" -->
     <div class="absolute bottom-12 flex flex-col items-center space-y-0.5">
-      <p class="font-smallcaption uppercase">Invites From</p>
+      <p class="font-smallcaption with-love uppercase">Invites From</p>
       <a 
         href="https://startswithlove.com" 
         target="_blank" 

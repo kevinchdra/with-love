@@ -366,19 +366,19 @@
 
 @media (max-width: 376px) {
   .rsvp-section {
-   transform: scale(0.8); /* 15% smaller (100% - 15% = 85%) */
+   transform: scale(0.9); /* 15% smaller (100% - 15% = 85%) */
   transform-origin: center center; /* Scale from center-top */
   margin-top:4vh;
   }
 }
 </style>
 
-<section class="min-h-[100dvh] rsvp-section flex flex-col justify-center items-center px-8 md:px-16 lg:px-32 text-white">
+<section class="min-h-[100dvh] rsvp-section flex flex-col justify-center items-center px-8 md:px-16 lg:px-28 text-white">
   <div class="max-w-xl w-full space-y-6 fade-in">
     <div class="text-center space-y-4">
       <p class="uppercase font-smallcaption mb-6">Reserve your seat</p>
       <h2 class="font-h2">Kindly Confirm Your Attendance</h2>
-      <hr class="mb-6">
+      <hr class="mb-6 border-white/50">
       <p class="font-h3 eventtime mb-10"> 
         Please RSVP by {formatRsvpDeadline(invite.rsvp_deadline)}. <br>
         <em> Your check-in QR code will arrive by email.</em> <br>
