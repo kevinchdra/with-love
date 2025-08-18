@@ -580,13 +580,13 @@
 
  .font-display.desktoplanding {
       font-family:'Snell Roundhand', serif;
-      font-size:8.55rem;
+      font-size:6.55rem;
         
     }
 
   .font-subheading.desktoplanding {
       font-family:'SangBleu Regular', sans-serif;
-      font-size:1rem;
+      font-size:0.85rem;
       letter-spacing: 0.25em;
       
     }
