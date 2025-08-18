@@ -5,9 +5,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import PersonalRsvp from '$lib/components/personalrsvp.svelte';
-  import LottieClientOnly from '$lib/components/LottieClientOnly.svelte';
-  import arrowDown from '$lib/lottie/arrowDown.json';
-  import LoadingScreen from '$lib/components/LoadingScreen.svelte';
+  
   import Wishes from '$lib/components/wishes.svelte';
   import { tick } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
@@ -720,9 +718,15 @@
   }
 
   .font-subheading {
-    font-family:'SangBleu Regular', sans-serif;
+    font-family:'SangBleu Light', sans-serif;
     font-size:0.75rem;
     letter-spacing: 0.25em;
+  }
+
+   .font-subheading.loading {
+    font-family:'SangBleu Regular', sans-serif;
+    font-size:0.75rem;
+  
   }
 
   .font-display {
@@ -916,18 +920,17 @@
 <!-- Loading Screen - Show while assets are loading -->
 {#if isLoading}
   <div class="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center text-white">
-    <!-- <LoadingScreen /> -->
     
     <!-- Custom loading progress -->
-    <div class="mt-8 flex flex-col text-center">
-      <p class="font-subheading text-white uppercase mb-6">{loadingStatus}</p>
-      <div class="w-60 md:w-68 lg:w-88 justify-center align-center h-0.5 bg-gray-800 overflow-hidden">
-        <div 
+    <div class="mt-8 flex flex-col text-center space-y-3">
+      <p class="font-subheading loading text-white uppercase">{loadingStatus}</p>
+     <!-- <div class="w-60 md:w-68 lg:w-88 justify-center align-center h-0.5 bg-gray-800 overflow-hidden"> 
+         <div 
           class="h-full bg-gray-300 transition-all duration-300 ease-out"
           style="width: {loadingProgress}%"
-        ></div> 
-      </div>
-      <!-- <p class="font-subheading mt-2 opacity-70">{Math.round(loadingProgress)}%</p> -->
+        ></div>
+     </div> -->
+      <p class="font-subheading loading opacity-70">{Math.round(loadingProgress)}%</p>
     </div>
   </div>
 {:else}
