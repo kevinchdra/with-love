@@ -150,7 +150,7 @@
 
 </style>
 
-<div class="min-h-screen px-8 py-12 text-white flex flex-col justify-center text-center items-center fade-in">
+<div class="min-h-screen px-8 px-12 md:px-22 lg:px-32 py-12 text-white flex flex-col justify-center text-center items-center fade-in">
     <p class="uppercase font-smallcaption  opacity-80 mb-6">WISHES</p>
    <h2 class="font-h2 mb-3 ">Words of Love</h2>
    <hr class="mb-8 w-full border-t-2 border-white/50 mx-auto">

@@ -53,6 +53,8 @@ let expandedAction = null;
 let selectedGuests = new Set();
 let selectedGifts = new Set();
 let selectedGiftGroups = new Set();
+let showDeleteConfirmation = false;
+let isDeleting = false;
 
 // ============================================================================
 // MODAL STATE
@@ -65,6 +67,7 @@ let showEditGiftModal = false;
 let showDeleteGiftsConfirmation = false;
 let isDeletingGifts = false;
 let editingGift = null;
+let selectedGiftGroupForPreview = false;
 
 // Message Modals
 let showMessagePreviewModal = false;
@@ -533,43 +536,94 @@ async function addGuest() {
 /**
  * Delete selected guests
  */
+// async function deleteSelectedGuests() {
+//     if (selectedGuests.size === 0) return;
+
+//     try {
+//         isDeleting = true;
+//         const guestIds = Array.from(selectedGuests);
+        
+//         const { error, count } = await supabase
+//             .from('guests')
+//             .delete({ count: 'exact' })
+//             .in('guest_id', guestIds);
+
+//         if (error) {
+//             console.error('Supabase delete error:', error);
+//             alert(`Failed to delete guests: ${error.message}`);
+//             return;
+//         }
+
+//         if (count === 0) {
+//             alert('No guests were deleted. This may be due to permission restrictions.');
+//             await loadDashboardData();
+//             return;
+//         }
+
+//         console.log(`Successfully deleted ${count} guest(s)`);
+        
+//         await loadDashboardData();
+//         selectedGuests.clear();
+//         selectedGuests = selectedGuests;
+//         showDeleteConfirmation = false;
+        
+//     } catch (err) {
+//         console.error('Error deleting guests:', err);
+//         alert(`Failed to delete guests: ${err.message || 'Unknown error'}`);
+//     } finally {
+//         isDeleting = false;
+//     }
+// }
+
 async function deleteSelectedGuests() {
-    if (selectedGuests.size === 0) return;
+  if (selectedGuests.size === 0) return;
 
-    try {
-        isDeleting = true;
-        const guestIds = Array.from(selectedGuests);
-        
-        const { error, count } = await supabase
-            .from('guests')
-            .delete({ count: 'exact' })
-            .in('guest_id', guestIds);
+  try {
+    isDeleting = true;
+    const guestIds = Array.from(selectedGuests);
 
-        if (error) {
-            console.error('Supabase delete error:', error);
-            alert(`Failed to delete guests: ${error.message}`);
-            return;
-        }
+    // Step 1: Delete all gifts associated with these guests
+    const { error: giftDeleteError } = await supabase
+      .from('gifts')
+      .delete()
+      .in('guest_id', guestIds);
 
-        if (count === 0) {
-            alert('No guests were deleted. This may be due to permission restrictions.');
-            await loadDashboardData();
-            return;
-        }
-
-        console.log(`Successfully deleted ${count} guest(s)`);
-        
-        await loadDashboardData();
-        selectedGuests.clear();
-        selectedGuests = selectedGuests;
-        showDeleteConfirmation = false;
-        
-    } catch (err) {
-        console.error('Error deleting guests:', err);
-        alert(`Failed to delete guests: ${err.message || 'Unknown error'}`);
-    } finally {
-        isDeleting = false;
+    if (giftDeleteError) {
+      console.error('Error deleting gifts:', giftDeleteError);
+      alert(`Failed to delete associated gifts: ${giftDeleteError.message}`);
+      return;
     }
+
+    // Step 2: Now delete the guests
+    const { error: guestDeleteError, count } = await supabase
+      .from('guests')
+      .delete({ count: 'exact' })
+      .in('guest_id', guestIds);
+
+    if (guestDeleteError) {
+      console.error('Error deleting guests:', guestDeleteError);
+      alert(`Failed to delete guests: ${guestDeleteError.message}`);
+      return;
+    }
+
+    if (count === 0) {
+      alert('No guests were deleted. They may have already been removed.');
+    } else {
+      console.log(`Successfully deleted ${count} guest(s) and their gifts`);
+    }
+
+    // Refresh data and reset state
+    await loadDashboardData();
+    selectedGuests.clear();
+    selectedGuests = selectedGuests;
+    showDeleteConfirmation = false;
+
+  } catch (err) {
+    console.error('Unexpected error during deletion:', err);
+    alert(`An unexpected error occurred: ${err.message || 'Unknown error'}`);
+  } finally {
+    isDeleting = false;
+  }
 }
 
 /**
@@ -2959,6 +3013,7 @@ onMount(async () => {
                                 </svg>
                                 <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
                             </button>
+
                             {#if selectedGuests.size > 0}
                                 <button class="action-btn-delete" on:click={() => showDeleteConfirmation = true} on:mouseenter={() => hoveredAction = 'delete'} on:mouseleave={() => hoveredAction = null}>
                                     <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2967,11 +3022,13 @@ onMount(async () => {
                                     <span class="action-label-delete font-semibold tracking-[0.33px] visible">Delete ({selectedGuests.size})</span>
                                 </button>
                             {/if}
+                            
                             <button class="action-btn-db ml-2 hover:scale-101" on:click={() => showAddGuestModal = true} on:mouseenter={() => hoveredAction = 'add'} on:mouseleave={() => hoveredAction = null}>
                                 <span class="action-label-db tracking-[0.33px] font-semibold">Add Guest</span>
                             </button>
                         </div>
                     </div>
+
 
                     <table class="data-table">
                         <thead>
@@ -3704,6 +3761,37 @@ onMount(async () => {
         </div>
     </div>
 {/if}
+
+   <!-- Delete Confirmation Modal -->
+    {#if showDeleteConfirmation}
+        <div class="modal-overlay" on:click={() => showDeleteConfirmation = false}>
+            <div class="modal-content" on:click|stopPropagation>
+                <div class="modal-header">
+                    <h3 class="modal-title">Confirm Deletion</h3>
+                    <button class="modal-close" on:click={() => showDeleteConfirmation = false}>
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <p style="margin-bottom: 24px; color: #525252;">
+                    Are you sure you want to delete {selectedGuests.size} guest{selectedGuests.size > 1 ? 's' : ''}? This action cannot be undone.
+                </p>
+                
+                <div class="form-actions">
+                    <button class="btn btn-secondary" on:click={() => showDeleteConfirmation = false} disabled={isDeleting}>
+                        Cancel
+                    </button>
+                    <button class="btn btn-primary !bg-red-600" on:click={deleteSelectedGuests} disabled={isDeleting}>
+                        {isDeleting ? 'Deleting...' : 'Delete'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    {/if}
+
+
 
     <!-- Metrics Settings Modal -->
     {#if showMetricsSettings}
