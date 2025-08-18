@@ -33,6 +33,11 @@
   $: clientSlug = $page.params.clientSlug;
   $: guestSlug = $page.params.guestSlug;
 
+  // ─── Loading State Management ─────────────────────────────────────────────
+  let isLoading = true;
+  let loadingProgress = 0;
+  let loadingStatus = 'Initializing...';
+
   let showAccount = true;
   let clicked = false;
   let audio;
@@ -40,6 +45,135 @@
 
   // ─── Google Maps Integration ──────────────────────────────────────────────
   const mapsUrl = "https://www.google.com/maps?q=Hotel+Mulia+Senayan,+Jakarta";
+
+  // ─── Font Preloading ──────────────────────────────────────────────────────
+  const FONTS_TO_PRELOAD = [
+    { family: 'SangBleu Regular', urls: ['/fonts/SangBleu-Regular.woff2', '/fonts/SangBleu-Regular.woff'] },
+    { family: 'Snell Roundhand', urls: ['/fonts/SnellRoundhand.woff2', '/fonts/SnellRoundhand.woff'] },
+    { family: 'DM Sans', urls: ['https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'] },
+    { family: 'Millionaire_Roman', urls: ['/fonts/Millionaire-Roman.woff2', '/fonts/Millionaire-Roman.woff'] },
+    { family: 'Millionaire_Script', urls: ['/fonts/Millionaire-Script.woff2', '/fonts/Millionaire-Script.woff'] },
+    { family: 'SangBleu Light', urls: ['/fonts/SangBleu-Light.woff2', '/fonts/SangBleu-Light.woff'] }
+  ];
+
+  // ─── Static Images to Preload ─────────────────────────────────────────────
+  const STATIC_IMAGES = [
+    '/cross.png',
+    '/groom.png',
+    '/bride.png',
+    '/snow.gif',
+    '/deco1.png',
+    '/deco2.png',
+    '/deco3.png',
+    '/deco4.png'
+  ];
+
+  // ─── Preloading Functions ─────────────────────────────────────────────────
+  function preloadFont(fontConfig) {
+    return Promise.all(
+      fontConfig.urls.map(url => {
+        if (url.includes('googleapis.com')) {
+          // For Google Fonts, just create a link element
+          return new Promise((resolve) => {
+            const link = document.createElement('link');
+            link.rel = 'preload';
+            link.as = 'style';
+            link.href = url;
+            link.onload = () => resolve();
+            link.onerror = () => resolve(); // Don't fail if Google Fonts fails
+            document.head.appendChild(link);
+          });
+        } else {
+          // For local fonts, use FontFace API
+          return new Promise((resolve, reject) => {
+            const font = new FontFace(fontConfig.family, `url(${url})`);
+            font.load().then(() => {
+              document.fonts.add(font);
+              resolve();
+            }).catch(() => {
+              // Try next URL or resolve anyway
+              resolve();
+            });
+          });
+        }
+      })
+    );
+  }
+
+  function preloadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(src);
+      img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+      img.src = src;
+    });
+  }
+
+  function preloadVideo(src) {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.onloadeddata = () => resolve(src);
+      video.onerror = () => reject(new Error(`Failed to load video: ${src}`));
+      video.src = src;
+      video.load();
+    });
+  }
+
+  // ─── Main Preloading Function ─────────────────────────────────────────────
+  async function preloadAllAssets() {
+    const totalSteps = 4; // fonts, static images, dynamic images, video
+    let currentStep = 0;
+
+    try {
+      // Step 1: Preload Fonts
+      loadingStatus = 'Celebrating Love';
+      loadingProgress = (currentStep / totalSteps) * 100;
+      
+      await Promise.allSettled(
+        FONTS_TO_PRELOAD.map(font => preloadFont(font))
+      );
+      
+      currentStep++;
+      loadingProgress = (currentStep / totalSteps) * 100;
+
+      // Step 2: Preload Static Images
+      loadingStatus = 'Celebrating Family';
+      
+      await Promise.allSettled(
+        STATIC_IMAGES.map(src => preloadImage(src))
+      );
+      
+      currentStep++;
+      loadingProgress = (currentStep / totalSteps) * 100;
+
+      // Step 3: Load and Preload Dynamic Images from Supabase
+      loadingStatus = 'Celebrating Forever';
+      
+      await loadSupabaseImages();
+      
+      currentStep++;
+      loadingProgress = (currentStep / totalSteps) * 100;
+
+      // Step 4: Preload Video
+      loadingStatus = 'Celebrating Together';
+      
+      await loadSupabaseVideo();
+      
+      currentStep++;
+      loadingProgress = 100;
+
+      // Small delay to show completion
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      loadingStatus = 'Complete!';
+      isLoading = false;
+
+    } catch (error) {
+      console.error('Error during preloading:', error);
+      // Still proceed even if some assets fail
+      isLoading = false;
+    }
+  }
 
   // ─── Improved Google Calendar Integration ─────────────────────────────────
   
@@ -54,16 +188,15 @@
     return date.toISOString().replace(/-|:|\.\d\d\d/g, '');
   }
 
+  //Parse Wedding Gift Note
+  function parseFormatting(text) {
+    if (!text) return '';
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // **bold**
+      .replace(/\*(.*?)\*/g, '<em>$1</em>');             // *italic*
+  }
 
-//Parse Wedding Gift Note
-function parseFormatting(text) {
-  if (!text) return '';
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // **bold**
-    .replace(/\*(.*?)\*/g, '<em>$1</em>');             // *italic*
-}
-
-$: formattedGiftNote = parseFormatting(couple.wedding_gift_note);
+  $: formattedGiftNote = parseFormatting(couple.wedding_gift_note);
 
   /**
    * Creates a Google Calendar URL for a single event with timezone handling
@@ -180,67 +313,92 @@ $: formattedGiftNote = parseFormatting(couple.wedding_gift_note);
 
   let videoUrl = '';
 
-  onMount(() => {
-    const { data: publicData, error } = supabase
-      .storage
-      .from('invites-images')
-      .getPublicUrl(`${clientSlug}/video.webm`);
+  // ─── Supabase Asset Loading ───────────────────────────────────────────────
+  async function loadSupabaseVideo() {
+    try {
+      const { data: publicData, error } = supabase
+        .storage
+        .from('invites-images')
+        .getPublicUrl(`${clientSlug}/video.webm`);
 
-    if (error) {
-      console.error('Error getting public URL:', error);
-    } else {
+      if (error) {
+        console.error('Error getting video public URL:', error);
+        return;
+      }
+
       videoUrl = publicData.publicUrl;
       console.log('Video URL:', videoUrl);
+      
+      // Preload the video
+      if (videoUrl) {
+        await preloadVideo(videoUrl);
+      }
+    } catch (error) {
+      console.error('Error loading video:', error);
     }
-  });
+  }
 
   //Carousel for countdown
   let images = [];
   let currentIndex = 0;
 
-  onMount(async () => {
-    // List files in the specific client folder, not root
-    const { data, error } = await supabase
-      .storage
-      .from('invites-images')
-      .list(clientSlug, { limit: 100 }); // Use clientSlug as the folder path
-      
-    console.log(`Files in ${clientSlug} folder:`, data, error);
-    console.log("Client slug:", clientSlug);
-    
-    if (error) {
-      console.error('Error listing images:', error);
-      return;
-    }
-
-    console.log("Files found in folder:", data);
-
-    if (!data || data.length === 0) {
-      console.warn(`No files found in folder: ${clientSlug}`);
-      return;
-    }
-   
-    const sorted = data
-      .filter(file => /\.(jpe?g|png|webp)$/i.test(file.name))
-      .sort((a, b) => parseInt(a.name) - parseInt(b.name));
-
-    images = sorted.map(file => {
-      const { data: publicData } = supabase
+  async function loadSupabaseImages() {
+    try {
+      // List files in the specific client folder, not root
+      const { data, error } = await supabase
         .storage
         .from('invites-images')
-        .getPublicUrl(`${clientSlug}/${file.name}`);
-      return publicData.publicUrl;
-    });
+        .list(clientSlug, { limit: 100 }); // Use clientSlug as the folder path
+        
+      console.log(`Files in ${clientSlug} folder:`, data, error);
+      console.log("Client slug:", clientSlug);
+      
+      if (error) {
+        console.error('Error listing images:', error);
+        return;
+      }
 
-    console.log("Image URLs:", images);
+      console.log("Files found in folder:", data);
 
-    if (images.length > 0) startCarousel();
-  });
+      if (!data || data.length === 0) {
+        console.warn(`No files found in folder: ${clientSlug}`);
+        return;
+      }
+     
+      const sorted = data
+        .filter(file => /\.(jpe?g|png|webp)$/i.test(file.name))
+        .sort((a, b) => parseInt(a.name) - parseInt(b.name));
+
+      const imageUrls = sorted.map(file => {
+        const { data: publicData } = supabase
+          .storage
+          .from('invites-images')
+          .getPublicUrl(`${clientSlug}/${file.name}`);
+        return publicData.publicUrl;
+      });
+
+      console.log("Image URLs:", imageUrls);
+
+      // Preload all images
+      const preloadedImages = await Promise.allSettled(
+        imageUrls.map(url => preloadImage(url))
+      );
+
+      // Only keep successfully loaded images
+      images = preloadedImages
+        .filter(result => result.status === 'fulfilled')
+        .map(result => result.value);
+
+      if (images.length > 0) startCarousel();
+    } catch (error) {
+      console.error('Error loading Supabase images:', error);
+    }
+  }
 
   function startCarousel() {
     setInterval(() => {
       currentIndex = (currentIndex + 1) % images.length;
-    }, 1500); // change every 3s
+    }, 1500); // change every 1.5s
   }
 
   //Parse Client Name
@@ -270,7 +428,10 @@ $: formattedGiftNote = parseFormatting(couple.wedding_gift_note);
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
+    // Start preloading immediately
+    await preloadAllAssets();
+    
     updateCountdown();
     intervalTime = setInterval(updateCountdown, 1000);
 
@@ -279,14 +440,8 @@ $: formattedGiftNote = parseFormatting(couple.wedding_gift_note);
     window.addEventListener('mousemove', playAudio, { once: true });
     window.addEventListener('click', playAudio, { once: true });
     document.addEventListener('visibilitychange', handleVisibilityChange);
-  });
 
-  onDestroy(() => {
-    clearInterval(intervalTime);
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-  });
-
-  onMount(() => {
+    // Intersection Observer for animations
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach(entry => {
@@ -302,6 +457,11 @@ $: formattedGiftNote = parseFormatting(couple.wedding_gift_note);
 
     const fadeElements = document.querySelectorAll('.fade-in');
     fadeElements.forEach(el => observer.observe(el));
+  });
+
+  onDestroy(() => {
+    clearInterval(intervalTime);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
   });
 
   // ─── Background Music Logic ───────────────────────────────────────────────
@@ -344,70 +504,70 @@ $: formattedGiftNote = parseFormatting(couple.wedding_gift_note);
   }
 
   // ─── Scroll to Devotions Section ─────────────────────────────────────────
-function unlockScrollAndScrollDown() {
-  const targetY = window.innerHeight;
-  const startY = window.pageYOffset;
-  const distance = targetY - startY;
-  const duration = 1000; // milliseconds
-  let startTime = null;
+  function unlockScrollAndScrollDown() {
+    const targetY = window.innerHeight;
+    const startY = window.pageYOffset;
+    const distance = targetY - startY;
+    const duration = 1000; // milliseconds
+    let startTime = null;
 
-  function smoothScroll(currentTime) {
-    if (startTime === null) startTime = currentTime;
-    const timeElapsed = currentTime - startTime;
-    const progress = Math.min(timeElapsed / duration, 1);
-    
-    // Ease-out function for smooth deceleration
-    const ease = 1 - Math.pow(1 - progress, 3);
-    
-    window.scrollTo(0, startY + (distance * ease));
-    
-    if (progress < 1) {
-      requestAnimationFrame(smoothScroll);
+    function smoothScroll(currentTime) {
+      if (startTime === null) startTime = currentTime;
+      const timeElapsed = currentTime - startTime;
+      const progress = Math.min(timeElapsed / duration, 1);
+      
+      // Ease-out function for smooth deceleration
+      const ease = 1 - Math.pow(1 - progress, 3);
+      
+      window.scrollTo(0, startY + (distance * ease));
+      
+      if (progress < 1) {
+        requestAnimationFrame(smoothScroll);
+      }
     }
+    
+    requestAnimationFrame(smoothScroll);
   }
-  
-  requestAnimationFrame(smoothScroll);
-}
 
   // ─── Account Copy ─────────────────────────────────────────────────────────
   async function copyAccountNumber(number) {
-  try {
-    await navigator.clipboard.writeText(number);
-    copiedAccounts[number] = true;
-    await tick(); // wait for DOM to update
-
-    // Reset after 2 seconds
-    setTimeout(() => {
-      copiedAccounts[number] = false;
-    }, 2000);
-  } catch (err) {
-    console.error("Clipboard API failed, trying fallback:", err);
-    
-    // Fallback method for mobile/older browsers
     try {
-      const textArea = document.createElement('textarea');
-      textArea.value = number;
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-999999px';
-      textArea.style.top = '-999999px';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      
+      await navigator.clipboard.writeText(number);
       copiedAccounts[number] = true;
-      await tick();
-      
+      await tick(); // wait for DOM to update
+
+      // Reset after 2 seconds
       setTimeout(() => {
         copiedAccounts[number] = false;
       }, 2000);
-    } catch (fallbackErr) {
-      console.error("All copy methods failed:", fallbackErr);
-      alert(`Copy failed. Number: ${number}`);
+    } catch (err) {
+      console.error("Clipboard API failed, trying fallback:", err);
+      
+      // Fallback method for mobile/older browsers
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = number;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        copiedAccounts[number] = true;
+        await tick();
+        
+        setTimeout(() => {
+          copiedAccounts[number] = false;
+        }, 2000);
+      } catch (fallbackErr) {
+        console.error("All copy methods failed:", fallbackErr);
+        alert(`Copy failed. Number: ${number}`);
+      }
     }
   }
-}
 
   // ─── Dress Code Swatches ─────────────────────────────────────────────────
   $: colorSwatches = (() => {
@@ -518,6 +678,18 @@ function unlockScrollAndScrollDown() {
 
 <svelte:head>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Preload critical fonts -->
+  {#each FONTS_TO_PRELOAD as font}
+    {#each font.urls as url}
+      {#if !url.includes('googleapis.com')}
+        <link rel="preload" as="font" href={url} type="font/woff2" crossorigin />
+      {/if}
+    {/each}
+  {/each}
+  <!-- Preload critical images -->
+  {#each STATIC_IMAGES as imageSrc}
+    <link rel="preload" as="image" href={imageSrc} />
+  {/each}
 </svelte:head>
 
 <style lang="postcss">
@@ -680,9 +852,6 @@ function unlockScrollAndScrollDown() {
       font-size:4.55rem;
     }
 
-    
-
-
     .font-display.dresscode{
       font-family:'Snell Roundhand', serif;
       font-size:2.15rem;
@@ -744,1037 +913,1034 @@ function unlockScrollAndScrollDown() {
   Your browser does not support the audio tag.
 </audio>
 
-<!-- <LoadingScreen /> -->
-<slot />
-
-<!-- Desktop Layout Wrapper -->
-<div class="hidden lg:flex h-screen overflow-hidden">
-  <!-- Left Panel - New Landing Section (Desktop Only) -->
-  <div class="w-[60%] h-full relative overflow-hidden">
-  <!-- Background Image Carousel -->
-{#if images.length > 0}
-  <img
-    src={images[Math.floor(Math.random() * images.length)]}
-    alt="Background"
-    class="absolute inset-0 w-full h-full object-cover"
-    style="object-position: 65%;"
-  />
+<!-- Loading Screen - Show while assets are loading -->
+{#if isLoading}
+  <div class="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center text-white">
+    <!-- <LoadingScreen /> -->
+    
+    <!-- Custom loading progress -->
+    <div class="mt-8 flex flex-col text-center">
+      <p class="font-subheading text-white uppercase mb-6">{loadingStatus}</p>
+      <div class="w-60 md:w-68 lg:w-88 justify-center align-center h-0.5 bg-gray-800 overflow-hidden">
+        <div 
+          class="h-full bg-gray-300 transition-all duration-300 ease-out"
+          style="width: {loadingProgress}%"
+        ></div> 
+      </div>
+      <!-- <p class="font-subheading mt-2 opacity-70">{Math.round(loadingProgress)}%</p> -->
+    </div>
+  </div>
 {:else}
-  <!-- Fallback background color while images load -->
-  <div class="absolute inset-0 w-full h-full bg-black"></div>
-{/if}
-  
-  <!-- Dark overlay -->
-  <div class="absolute inset-0 bg-black/25"></div>
-  
-  <!-- Content Overlay -->
-  <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 px-8">
-   
-    <div class="flex flex-col items-center justify-center">
-      
-      <h1 class="font-display desktoplanding text-white rotate-[-6deg] text-center leading-none mb-22">
-       
-          <p class="m-0">{name1}</p>
-          <p class="-m-3">&</p>
-          <p class="m-0">{name2}</p>
-        
-      </h1>
+  <!-- Main Content - Only show after loading is complete -->
+  <div in:fade={{ duration: 800 }}>
+    <slot />
 
-      <p class="font-subheading desktoplanding uppercase text-white">
-        {formatEventDate(primaryEvent?.event_date || invite.event_date, primaryEvent?.timezone)}
-      </p>
-    </div>
-
-    <!-- <button
-      on:click={() => {
-        const rightPanel = document.querySelector('.desktop-right-panel');
-        if (rightPanel) rightPanel.scrollTo({ top: 0, behavior: 'smooth' });
-      }}
-      class="font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition"
-    >
-      VIEW INVITATION
-    </button> -->
-  </div>
-</div>
-
-
-  <!-- Right Panel - All Current Content Scrollable -->
-  <div class="w-[40%] h-full overflow-y-auto overflow-x-hidden">
-    <div class="w-full">
-        <!--Start of Landing Page-->
-<div class="relative w-full min-h-[100dvh]">
-  <!-- Background image -->
-  <video
-  class="fixed top-0 left-0 w-full h-full object-cover z-[-1]"
-  style="height: 100%; min-height: 100%; background-color: #000; object-position: 65%;"
-  autoplay
-  muted
-  loop
-  playsinline
->
-    {#if videoUrl}
-      <source src={videoUrl} type="video/webm" />
-    {/if}
-    Your browser does not support the video tag.
-  </video>
-
-  <!-- Dark overlay -->
-  <div class="fixed top-0 left-0 w-full h-full bg-black/40 z-[-1]"></div>
-
-  <!--Introduction-->
-  <div class="landing-section relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] fade-in">
-    <p class="font-subheading text-white uppercase pb-30">
-      Dear {guest.full_name},
-    </p>
-
-    <div class="flex flex-col items-center justify-center">
-      <p class="font-subheading uppercase text-white pb-10">
-        We Invite You To Celebrate
-      </p>
-      <h1 class="font-display text-white rotate-[-6deg] text-center leading-none pb-10">
-        <p class="m-0">{name1}</p>
-        <p class="-m-3">&</p>
-        <p class="m-0">{name2}</p>
-      </h1>
-
-      <p class="font-subheading uppercase text-white pb-20">
-        {formatEventDate(primaryEvent?.event_date || invite.event_date, primaryEvent?.timezone)}
-      </p>
-    </div>
-
-    <button
-      on:click={unlockScrollAndScrollDown}
-      class="font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition text-xs sm:text-sm"
-    >
-      JOIN THE CELEBRATION
-    </button>
-  </div>
-</div>
-
-<!--End of Landing-->
-
-<!--Devotions-->
-{#if invite.section_toggle.includes("devotions")}
-<div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-4 sm:px-6 space-y-8 sm:space-y-12"> 
-  <img src="/cross.png" alt="cross" class="w-4 h-5 sm:w-3 sm:h-4 object-fill opacity-80 fade-in">
-  <h1 class="font-h2 text-white fade-in">I have found the one whom my soul loves.</h1>
-  <p class="font-smallcaption font-bold text-white uppercase tracking-[1em] sm:tracking-[1.5em] md:tracking-[2em] opacity-90 text-xs sm:text-sm fade-in">SONG OF SOLOMON 3:4</p>
-  <div class="absolute bottom-40 left-1/2 -translate-x-1/2 w-20 h-20 flex justify-center items-center fade-in">
-    <!-- <div class="scale-50 opacity-80">
-      <LottieClientOnly {arrowDown} />
-    </div> -->
-  </div>
-</div>
-{/if}
-<!--End of Devotions-->
-
-<!--Couple-->
-{#if invite.section_toggle.includes("groom-intro")}
-<div class="relative flex flex-col items-center">
-  <div class="absolute inset-0 bg-black/15 z-[5]"></div>
-
-  <!-- Background image -->
-  <img src="/groom.png" alt="Background" class="w-full h-full object-cover block">
-  <img src="/snow.gif" alt="Overlay" class="absolute inset-0 w-full h-full object-cover pointer-events-none z-10">
-
-  <!-- Overlay Content -->
-  <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-3 px-4 fade-in">
-    <img src="/deco3.png" alt="Top Deco" class="w-8 sm:w-10 mb-12 opacity-90">
-
-    <div class="flex items-center space-x-4 mb-4">
-      <img src="/deco1.png" alt="Left Deco" class="w-10 sm:w-14">
-      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">THE GROOM</h4>
-      <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
-    </div>
-
-    <!-- Name -->
-    <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
-      {invite.groom_name}
-    </h2>
-
-    <div class="flex flex-col items-center space-y-">
-      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">
-        {invite.groom_parents}
-      </h4>
-      <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
-    </div>
-  </div>
-</div>
-{/if}
-
-{#if invite.section_toggle.includes("bride-intro")}
-<div class="relative flex flex-col items-center">
-  <div class="absolute inset-0 bg-black/15 z-[5]"></div>
-
-  <!-- Background image -->
-  <img src="/bride.png" alt="Background" class="w-full h-full object-cover block">
-  <img src="/snow.gif" alt="Overlay" class="absolute inset-0 w-full h-full object-cover pointer-events-none z-10">
-
-  <!-- Overlay Content -->
-  <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-3 px-4 fade-in">
-    <img src="/deco3.png" alt="Top Deco" class="w-8 sm:w-10 mb-12 opacity-90">
-
-    <div class="flex items-center space-x-4 mb-4">
-      <img src="/deco1.png" alt="Left Deco" class="w-10 sm:w-14">
-      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">THE BRIDE</h4>
-      <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
-    </div>
-
-    <!-- Name -->
-    <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
-      {invite.bride_name}
-    </h2>
-
-    <div class="flex flex-col items-center space-y-">
-      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">
-        {invite.bride_parents}
-      </h4>
-      <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
-    </div>
-  </div>
-</div>
-{/if}
-<!--End of Couple-->
-
-<!-- Events -->
-<div class="flex flex-col events-section min-h-[100dvh] items-center justify-center text-center px-8 md:px-16 lg:px-28 py-10 text-white">
-  {#each events as event, index}
-    <!-- Check if this event type should be shown based on section_toggle -->
-    {#if invite.section_toggle.includes(event.event_type) || invite.section_toggle.includes("events")}
-      <div class="mb-14 w-full fade-in" class:mb-12={index === events.length - 1}>
-        
-        <!-- Show "Event" label only for the first event -->
-        {#if index === 0}
-          <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
+    <!-- Desktop Layout Wrapper -->
+    <div class="hidden lg:flex h-screen overflow-hidden">
+      <!-- Left Panel - New Landing Section (Desktop Only) -->
+      <div class="w-[60%] h-full relative overflow-hidden">
+        <!-- Background Image Carousel -->
+        {#if images.length > 0}
+          <img
+            src={images[Math.floor(Math.random() * images.length)]}
+            alt="Background"
+            class="absolute inset-0 w-full h-full object-cover"
+            style="object-position: 65%;"
+          />
+        {:else}
+          <!-- Fallback background color while images load -->
+          <div class="absolute inset-0 w-full h-full bg-black"></div>
         {/if}
         
-        <!-- Dynamic Event Title -->
-        <h2 class="font-h2 mb-3 capitalize">
-          {event.event_type.replace('-', ' ')}
-        </h2>
-        <hr class="mb-6 border-t-2 border-white/50">
+        <!-- Dark overlay -->
+        <div class="absolute inset-0 bg-black/25"></div>
         
-        <!-- Dynamic Date and Time -->
-        <div class="">
-          <p class="font-h3">
-            {formatEventDate(event.event_date, event.timezone)}
-          </p>
-          <p class="font-h3 eventtime mb-6">
-            {formatEventTimeRange(event.start_time, event.end_time, event.timezone)}
-          </p>
+        <!-- Content Overlay -->
+        <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 px-8">
+          <div class="flex flex-col items-center justify-center">
+            <h1 class="font-display desktoplanding text-white rotate-[-6deg] text-center leading-none mb-22">
+              <p class="m-0">{name1}</p>
+              <p class="-m-3">&</p>
+              <p class="m-0">{name2}</p>
+            </h1>
+
+            <p class="font-subheading desktoplanding uppercase text-white">
+              {formatEventDate(primaryEvent?.event_date || invite.event_date, primaryEvent?.timezone)}
+            </p>
+          </div>
         </div>
-        
-        <!-- Dynamic Location -->
-        <p class="font-h3 sm:text-xl md:text-2xl mb-6">
-          {event.location}
-        </p>
-        
-        <!-- Dynamic Location Button -->
-        <div class="space-y-4">
-          <a  
-            href="https://www.google.com/maps?q={encodeURIComponent(event.location)}"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase mr-4"
-          >
-            + View Location
-          </a>
-          
-          <!-- Individual Calendar Button for each event -->
-          {#if event.calendarUrl}
-            <button
-              on:click={() => handleCalendarClick(event, event.calendarUrl)}
-              class="calendar-button inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
+      </div>
+
+      <!-- Right Panel - All Current Content Scrollable -->
+      <div class="w-[40%] h-full overflow-y-auto overflow-x-hidden">
+        <div class="w-full">
+          <!--Start of Landing Page-->
+          <div class="relative w-full min-h-[100dvh]">
+            <!-- Background image -->
+            <video
+              class="fixed top-0 left-0 w-full h-full object-cover z-[-1]"
+              style="height: 100%; min-height: 100%; background-color: #000; object-position: 65%;"
+              autoplay
+              muted
+              loop
+              playsinline
             >
-              <svg 
-                class="calendar-icon" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                xmlns="http://www.w3.org/2000/svg"
+              {#if videoUrl}
+                <source src={videoUrl} type="video/webm" />
+              {/if}
+              Your browser does not support the video tag.
+            </video>
+
+            <!-- Dark overlay -->
+            <div class="fixed top-0 left-0 w-full h-full bg-black/40 z-[-1]"></div>
+
+            <!--Introduction-->
+            <div class="landing-section relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] fade-in">
+              <p class="font-subheading text-white uppercase pb-30">
+                Dear {guest.full_name},
+              </p>
+
+              <div class="flex flex-col items-center justify-center">
+                <p class="font-subheading uppercase text-white pb-10">
+                  We Invite You To Celebrate
+                </p>
+                <h1 class="font-display text-white rotate-[-6deg] text-center leading-none pb-10">
+                  <p class="m-0">{name1}</p>
+                  <p class="-m-3">&</p>
+                  <p class="m-0">{name2}</p>
+                </h1>
+
+                <p class="font-subheading uppercase text-white pb-20">
+                  {formatEventDate(primaryEvent?.event_date || invite.event_date, primaryEvent?.timezone)}
+                </p>
+              </div>
+
+              <button
+                on:click={unlockScrollAndScrollDown}
+                class="font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition text-xs sm:text-sm"
               >
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
-                <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/>
-                <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/>
-                <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/>
-              </svg>
-              + Add {event.event_type.replace('-', ' ')} to Calendar
+                JOIN THE CELEBRATION
+              </button>
+            </div>
+          </div>
+
+          <!--End of Landing-->
+
+          <!--Devotions-->
+          {#if invite.section_toggle.includes("devotions")}
+          <div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-4 sm:px-6 space-y-8 sm:space-y-12"> 
+            <img src="/cross.png" alt="cross" class="w-4 h-5 sm:w-3 sm:h-4 object-fill opacity-80 fade-in">
+            <h1 class="font-h2 text-white fade-in">I have found the one whom my soul loves.</h1>
+            <p class="font-smallcaption font-bold text-white uppercase tracking-[1em] sm:tracking-[1.5em] md:tracking-[2em] opacity-90 text-xs sm:text-sm fade-in">SONG OF SOLOMON 3:4</p>
+            <div class="absolute bottom-40 left-1/2 -translate-x-1/2 w-20 h-20 flex justify-center items-center fade-in">
+            </div>
+          </div>
+          {/if}
+          <!--End of Devotions-->
+
+          <!--Couple-->
+          {#if invite.section_toggle.includes("groom-intro")}
+          <div class="relative flex flex-col items-center">
+            <div class="absolute inset-0 bg-black/15 z-[5]"></div>
+
+            <!-- Background image -->
+            <img src="/groom.png" alt="Background" class="w-full h-full object-cover block">
+            <img src="/snow.gif" alt="Overlay" class="absolute inset-0 w-full h-full object-cover pointer-events-none z-10">
+
+            <!-- Overlay Content -->
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-3 px-4 fade-in">
+              <img src="/deco3.png" alt="Top Deco" class="w-8 sm:w-10 mb-12 opacity-90">
+
+              <div class="flex items-center space-x-4 mb-4">
+                <img src="/deco1.png" alt="Left Deco" class="w-10 sm:w-14">
+                <h4 class="font-smallcaption uppercase text-xs sm:text-sm">THE GROOM</h4>
+                <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
+              </div>
+
+              <!-- Name -->
+              <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
+                {invite.groom_name}
+              </h2>
+
+              <div class="flex flex-col items-center space-y-">
+                <h4 class="font-smallcaption uppercase text-xs sm:text-sm">
+                  {invite.groom_parents}
+                </h4>
+                <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
+              </div>
+            </div>
+          </div>
+          {/if}
+
+          {#if invite.section_toggle.includes("bride-intro")}
+          <div class="relative flex flex-col items-center">
+            <div class="absolute inset-0 bg-black/15 z-[5]"></div>
+
+            <!-- Background image -->
+            <img src="/bride.png" alt="Background" class="w-full h-full object-cover block">
+            <img src="/snow.gif" alt="Overlay" class="absolute inset-0 w-full h-full object-cover pointer-events-none z-10">
+
+            <!-- Overlay Content -->
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-3 px-4 fade-in">
+              <img src="/deco3.png" alt="Top Deco" class="w-8 sm:w-10 mb-12 opacity-90">
+
+              <div class="flex items-center space-x-4 mb-4">
+                <img src="/deco1.png" alt="Left Deco" class="w-10 sm:w-14">
+                <h4 class="font-smallcaption uppercase text-xs sm:text-sm">THE BRIDE</h4>
+                <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
+              </div>
+
+              <!-- Name -->
+              <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
+                {invite.bride_name}
+              </h2>
+
+              <div class="flex flex-col items-center space-y-">
+                <h4 class="font-smallcaption uppercase text-xs sm:text-sm">
+                  {invite.bride_parents}
+                </h4>
+                <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
+              </div>
+            </div>
+          </div>
+          {/if}
+          <!--End of Couple-->
+
+          <!-- Events -->
+          <div class="flex flex-col events-section min-h-[100dvh] items-center justify-center text-center px-8 md:px-16 lg:px-28 py-10 text-white">
+            {#each events as event, index}
+              <!-- Check if this event type should be shown based on section_toggle -->
+              {#if invite.section_toggle.includes(event.event_type) || invite.section_toggle.includes("events")}
+                <div class="mb-14 w-full fade-in" class:mb-12={index === events.length - 1}>
+                  
+                  <!-- Show "Event" label only for the first event -->
+                  {#if index === 0}
+                    <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
+                  {/if}
+                  
+                  <!-- Dynamic Event Title -->
+                  <h2 class="font-h2 mb-3 capitalize">
+                    {event.event_type.replace('-', ' ')}
+                  </h2>
+                  <hr class="mb-6 border-t-2 border-white/50">
+                  
+                  <!-- Dynamic Date and Time -->
+                  <div class="">
+                    <p class="font-h3">
+                      {formatEventDate(event.event_date, event.timezone)}
+                    </p>
+                    <p class="font-h3 eventtime mb-6">
+                      {formatEventTimeRange(event.start_time, event.end_time, event.timezone)}
+                    </p>
+                  </div>
+                  
+                  <!-- Dynamic Location -->
+                  <p class="font-h3 sm:text-xl md:text-2xl mb-6">
+                    {event.location}
+                  </p>
+                  
+                  <!-- Dynamic Location Button -->
+                  <div class="space-y-4">
+                    <a  
+                      href="https://www.google.com/maps?q={encodeURIComponent(event.location)}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase mr-4"
+                    >
+                      + View Location
+                    </a>
+                    
+                    <!-- Individual Calendar Button for each event -->
+                    {#if event.calendarUrl}
+                      <button
+                        on:click={() => handleCalendarClick(event, event.calendarUrl)}
+                        class="calendar-button inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
+                      >
+                        <svg 
+                          class="calendar-icon" 
+                          viewBox="0 0 24 24" 
+                          fill="none" 
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
+                          <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/>
+                          <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/>
+                          <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        + Add {event.event_type.replace('-', ' ')} to Calendar
+                      </button>
+                    {/if}
+                  </div>
+                </div>
+              {/if}
+            {/each}
+            
+            <!-- Fallback: Show message if no events match section_toggle -->
+            {#if events.length === 0 || !events.some(event => invite.section_toggle.includes(event.event_type))}
+              <div class="w-full fade-in">
+                <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
+                <h2 class="font-h2 mb-2">Coming Soon</h2>
+                <hr class="mb-6">
+                <p class="font-h3">Event details will be updated soon.</p>
+              </div>
+            {/if}
+          </div>
+          <!-- End of Events -->
+
+          {#if invite.section_toggle.includes("countdown")}
+          <!--Countdown-->
+          <div class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16">
+            <h1 class="font-h2 text-white mb-10 sm:mb-14 md:mb-22 fade-in">Until Our Celebration</h1>
+            {#if images.length > 0}
+              <img
+                src={images[currentIndex]}
+                alt="Countdown slideshow"
+                class="mb-10 max-h-[35vh] sm:max-h-[40vh] md:max-h-[50vh] w-auto max-w-[80%] sm:max-w-[70%] md:max-w-[60%] object-contain mx-auto transition-opacity duration-700"
+              />
+            {:else}
+              <p class="font-smallcaption text-white">Loading images...</p>
+            {/if}
+            
+            <div class="flex justify-center mb-12 fade-in">
+              <div class="grid grid-cols-4 gap-6 text-center justify-center items-center">
+                <!-- Days -->
+                <div class="flex flex-col items-center">
+                  <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{days}</div>
+                  <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Days</div>
+                </div>
+
+                <!-- Hours -->
+                <div class="flex flex-col items-center">
+                  <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{hours.toString().padStart(2, '0')}</div>
+                  <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Hours</div>
+                </div>
+
+                <!-- Minutes -->
+                <div class="flex flex-col items-center">
+                  <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{minutes.toString().padStart(2, '0')}</div>
+                  <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Mins</div>
+                </div>
+
+                <!-- Seconds -->
+                <div class="flex flex-col items-center">
+                  <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{seconds.toString().padStart(2, '0')}</div>
+                  <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Secs</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Enhanced Save the Date Button with Calendar Integration -->
+            {#if primaryCalendarUrl}
+              <button
+                on:click={() => handleCalendarClick(primaryEvent, primaryCalendarUrl)}
+                class="calendar-button inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
+              >
+                <svg 
+                  class="calendar-icon" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/>
+                  <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/>
+                  <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                Save the Date
+              </button>
+            {:else}
+              <!-- Fallback if no calendar URL is available -->
+              <div class="inline-block font-button text-white px-8 py-4 border border-white/50 rounded-full opacity-50 uppercase">
+                Save the Date (Coming Soon)
+              </div>
+            {/if}
+          </div>
+          <!--End of Countdown-->
+          {/if}
+
+          <!-- RSVP -->
+          <div class="">  
+            <PersonalRsvp 
+              guestSlug={$page.params.guestSlug} 
+              guest={data.guest}
+              invite={data.invite}
+            />
+          </div>
+          <!-- End of RSVP -->
+
+          <!-- Wishes -->
+          {#if invite.section_toggle.includes("wishes")}
+          <div class="relative w-full min-h-[100dvh] wishes-section overflow-hidden">
+            <div class="fade-in">
+              <Wishes />
+            </div>
+          </div>
+          {/if}
+          <!-- End of Wishes -->
+
+          <!-- Dress Code -->
+          {#if invite.section_toggle.includes("dress-code")}
+          <div class="relative w-full min-h-[100dvh] z-10 flex flex-col items-center justify-center text-center px-8 md:px-16 lg:px-28 overflow-hidden">
+            <div class="fade-in">
+              <!-- Content overlay -->
+              <div class="text-white">
+                <p class="font-smallcaption uppercase opacity-80 mb-6">WHAT TO WEAR</p>
+                
+                <p class="font-h2 text-white mb-6">
+                  We kindly request our guests to wear these colors for our special day.
+                </p>
+
+                <!-- Swatches -->
+                <div class="flex justify-center space-x-4 pt-2 mb-12">
+                  {#each colorSwatches as color}
+                    <div
+                      class="w-10 h-10 rounded-full shadow-lg"
+                      style="background-color: {color}"
+                    />
+                  {/each}
+                </div>
+              </div>
+            </div>
+            <a 
+              href="https://www.instagram.com/reel/DMAlgiSTamH/?igsh=MWwya2NxMnB6bTB4dw=="
+              target="_blank"
+              rel="noopener noreferrer"
+              class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
+            >
+              View Inspiration
+            </a>
+          </div>
+          {/if}
+          <!-- End of Dress Code -->
+
+          {#if invite.section_toggle.includes("faq")}
+          <!-- Rundown -->
+          <div class="relative w-full min-h-[100dvh] overflow-hidden">
+            <div class="fade-in">
+              <div class="relative z-10 min-h-[100dvh] flex flex-col items-center justify-center text-center text-white px-12 md:px-22 lg:px-32 space-y-8">
+                <p class="font-smallcaption uppercase opacity-80 mb-6">EVENT RUNDOWN</p>
+                <h1 class="font-h2 text-white mb-12">See everything we've got planned for you.</h1>
+                
+                <a 
+                  href="https://www.notion.so/Wedding-FAQ-152f5ed90e1447c89e5a76be413f07c7?source=copy_link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
+                >
+                  View FAQ
+                </a>
+              </div>
+            </div>
+          </div>
+          {/if}
+
+          <!-- Our Moments -->
+          {#if invite.section_toggle.includes("our-moments")}
+          <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white">
+            <div class="fade-in">
+              <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Our Moments</h1>
+              <div class="flex flex-col items-center justify-center w-full mx-auto my-6 sm:my-8 md:my-10 px-4 z-10">
+                <div class="relative w-full max-w-[280px] sm:max-w-xs aspect-[4/5] overflow-hidden">
+                  {#each images as img, i}
+                    <img
+                      src={img}
+                      alt="carousel"
+                      class="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+                      class:opacity-100={i === currentIndex}
+                      class:opacity-0={i !== currentIndex}
+                    />
+                  {/each}
+                </div>
+              </div>
+            </div>
+          </div>
+          {/if}
+          <!-- End of Our Moments -->
+
+          {#if invite.section_toggle.includes("wedding-gift")}
+          <!-- Wedding Gift-->
+          <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-8 md:px-16 lg:px-28 space-y-6 sm:space-y-8 text-white fade-in">
+            <p class="font-smallcaption uppercase opacity-80 mb-6">WEDDING GIFT</p>
+            <h1 class="font-h2">A Token of Love</h1>
+
+            <h4 class="font-h3 eventtime leading-6 mb-8">{@html formattedGiftNote}</h4>
+            
+            <button
+              on:click={() => (showAccount = !showAccount)}
+              class={`inline-block mt-4 px-8 py-4 uppercase text-xs sm:text-sm rounded font-button tracking-[0.15em] transition duration-300 ease-in-out 
+                ${showAccount 
+                  ? 'bg-[#C7DDD8] border-transparent' 
+                  : 'bg-transparent text-white border border-white hover:bg-[#C7DDD8] hover:text-black'}`}
+              style={showAccount ? 'color: #000000 !important;' : ''}
+            >
+              {showAccount ? "- HIDE ACCOUNT" : "+ VIEW ACCOUNT"}
             </button>
+
+            {#if showAccount}
+              <div class="px-4 sm:px-6 py-6 text-white text-center w-full max-w-sm mx-auto">
+                <!-- Groom Account -->
+                <div class="mb-5 border-t border-white/20 pt-4 text-left space-y-1">
+                  <div class="flex justify-between items-center">
+                    <div>
+                      <p class="font-smallcaption !opacity-100 !text-white uppercase">{couple?.groom_bank_name|| '-'}</p>
+                      <p class="font-button uppercase">Bank:{couple?.groom_bank || '-'}</p>
+                      <p class="font-h2 tracking-wider mt-2 opacity-90">{couple?.groom_bank_number || '-'}</p>
+                    </div>
+                    <button
+                      on:click={() => copyAccountNumber(couple.groom_bank_number)}
+                      class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition"
+                    > 
+                      {#if copiedAccounts[couple.groom_bank_number]}
+                        ✓
+                      {:else}
+                        Copy
+                      {/if}
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Bride Account -->
+                <div class="border-t border-white/20 pt-4 text-left space-y-1">
+                  <div class="flex justify-between items-center">
+                    <div>
+                      <p class="font-smallcaption !opacity-100 !text-white uppercase">{couple?.bride_bank_name || '-'}</p>
+                      <p class="font-smallcaption !opacity-100 !text-white uppercase">Bank:{couple?.bride_bank || '-'}</p>
+                      <p class="font-h2 tracking-wider mt-2 opacity-90">{couple?.bride_bank_number || '-'}</p>
+                    </div>
+                    <button
+                      on:click={() => copyAccountNumber(couple.bride_bank_number)}
+                      class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition"
+                    >
+                      {#if copiedAccounts[couple.bride_bank_number]}
+                        ✓
+                      {:else}
+                        Copy
+                      {/if}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            {/if}
+          </div>
+          <!--End of Wedding Gift-->
+          {/if}
+
+          {#if invite.section_toggle.includes("thank-you")}
+          <!--Thank you-->
+          <div class="relative flex flex-col items-center w-full h-[100dvh] fade-in">
+            <div class="absolute inset-0 bg-black opacity-0 z-[5] transition-opacity duration-1000 ease-in"></div>
+            
+            <div class="absolute inset-0 flex flex-col items-center text-center text-white z-10 p-6 sm:p-8 md:p-10">
+              <!-- Centered content -->
+              <div class="flex-1 flex flex-col items-center justify-center space-y-3 sm:space-y-4">
+                <p class="font-smallcaption uppercase opacity-80 mb-6">A Big Thank You</p>
+                <h1 class="font-h2 mb-6">See You Soon!</h1>
+                <h4 class="font-h3 eventtime">
+                  {@html (couple?.thank_you || '-').replace(/\n/g, '<br><br>')}
+                </h4>
+              </div>
+
+              <!-- Bottom "With Love" -->
+              <div class="absolute bottom-12 flex flex-col items-center space-y-0.5">
+                <p class="font-smallcaption uppercase">Invites From</p>
+                <a 
+                  href="https://startswithlove.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  class="with-love opacity-90 !text-white uppercase hover:text-gray-300 transition"
+                >
+                  STARTSWITHLOVE.COM
+                </a>
+              </div>
+            </div>
+          </div>
           {/if}
         </div>
       </div>
-    {/if}
-  {/each}
-  
-  <!-- Fallback: Show message if no events match section_toggle -->
-  {#if events.length === 0 || !events.some(event => invite.section_toggle.includes(event.event_type))}
-    <div class="w-full fade-in">
-      <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
-      <h2 class="font-h2 mb-2">Coming Soon</h2>
-      <hr class="mb-6">
-      <p class="font-h3">Event details will be updated soon.</p>
     </div>
-  {/if}
-</div>
-<!-- End of Events -->
 
-{#if invite.section_toggle.includes("countdown")}
-<!--Countdown-->
-<div class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16">
-  <h1 class="font-h2 text-white mb-10 sm:mb-14 md:mb-22 fade-in">Until Our Celebration</h1>
-  {#if images.length > 0}
-    <img
-      src={images[currentIndex]}
-      alt="Countdown slideshow"
-      class="mb-10 max-h-[35vh] sm:max-h-[40vh] md:max-h-[50vh] w-auto max-w-[80%] sm:max-w-[70%] md:max-w-[60%] object-contain mx-auto transition-opacity duration-700"
-    />
-  {:else}
-    <p class="font-smallcaption text-white">Loading images...</p>
-  {/if}
-  
-  <div class="flex justify-center mb-12 fade-in">
-    <div class="grid grid-cols-4 gap-6 text-center justify-center items-center">
-      <!-- Days -->
-      <div class="flex flex-col items-center">
-        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{days}</div>
-        <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Days</div>
-      </div>
+    <!-- Mobile Layout -->
+    <div class="lg:hidden h-[100dvh]">
+      <!--Start of Landing Page-->
+      <div class="relative w-full min-h-[100dvh]">
+        <!-- Background image -->
+        <video
+          class="fixed top-0 left-0 w-full h-full object-cover z-[-1]"
+          style="height: 100%; min-height: 100%; background-color: #000; object-position: 65%;"
+          autoplay
+          muted
+          loop
+          playsinline
+        >
+          {#if videoUrl}
+            <source src={videoUrl} type="video/webm" />
+          {/if}
+          Your browser does not support the video tag.
+        </video>
 
-      <!-- Hours -->
-      <div class="flex flex-col items-center">
-        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{hours.toString().padStart(2, '0')}</div>
-        <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Hours</div>
-      </div>
+        <!-- Dark overlay -->
+        <div class="fixed top-0 left-0 w-full h-full bg-black/50 z-[-1]"></div>
 
-      <!-- Minutes -->
-      <div class="flex flex-col items-center">
-        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{minutes.toString().padStart(2, '0')}</div>
-        <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Mins</div>
-      </div>
+        <!--Introduction-->
+        <div class="landing-section relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] fade-in">
+          <p class="font-subheading text-white uppercase pb-30">
+            Dear {guest.full_name},
+          </p>
 
-      <!-- Seconds -->
-      <div class="flex flex-col items-center">
-        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{seconds.toString().padStart(2, '0')}</div>
-        <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Secs</div>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Enhanced Save the Date Button with Calendar Integration -->
-  {#if primaryCalendarUrl}
-    <button
-      on:click={() => handleCalendarClick(primaryEvent, primaryCalendarUrl)}
-      class="calendar-button inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
-    >
-      <svg 
-        class="calendar-icon" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
-        <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/>
-        <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/>
-        <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/>
-      </svg>
-      Save the Date
-    </button>
-  {:else}
-    <!-- Fallback if no calendar URL is available -->
-    <div class="inline-block font-button text-white px-8 py-4 border border-white/50 rounded-full opacity-50 uppercase">
-      Save the Date (Coming Soon)
-    </div>
-  {/if}
-</div>
-<!--End of Countdown-->
-{/if}
+          <div class="flex flex-col items-center justify-center">
+            <p class="font-subheading uppercase text-white pb-10">
+              We Invite You To Celebrate
+            </p>
+            <h1 class="font-display text-white rotate-[-6deg] text-center leading-none pb-10">
+              <p class="m-0">{name1}</p>
+              <p class="-m-3">&</p>
+              <p class="m-0">{name2}</p>
+            </h1>
 
-<!-- RSVP -->
-<div class="">  
-  <PersonalRsvp 
-    guestSlug={$page.params.guestSlug} 
-    guest={data.guest}
-    invite={data.invite}
-  />
-</div>
-<!-- End of RSVP -->
-
-<!-- Wishes -->
-{#if invite.section_toggle.includes("wishes")}
-<div class="relative w-full min-h-[100dvh] wishes-section overflow-hidden">
-  <div class="fade-in">
-    <Wishes />
-  </div>
-</div>
-{/if}
-<!-- End of Wishes -->
-
-<!-- Dress Code -->
-{#if invite.section_toggle.includes("dress-code")}
-<div class="relative w-full min-h-[100dvh] z-10 flex flex-col items-center justify-center text-center px-8 md:px-16 lg:px-28 overflow-hidden">
-  <div class="fade-in">
-    <!-- Content overlay -->
-    <div class="text-white">
-      <p class="font-smallcaption uppercase opacity-80 mb-6">WHAT TO WEAR</p>
-      
-      <p class="font-h2 text-white mb-6">
-        We kindly request our guests to wear these colors for our special day.
-      </p>
-
-      <!-- Swatches -->
-      <div class="flex justify-center space-x-4 pt-2 mb-12">
-        {#each colorSwatches as color}
-          <div
-            class="w-10 h-10 rounded-full shadow-lg"
-            style="background-color: {color}"
-          />
-        {/each}
-      </div>
-    </div>
-  </div>
-  <a 
-    href="https://www.instagram.com/reel/DMAlgiSTamH/?igsh=MWwya2NxMnB6bTB4dw=="
-    target="_blank"
-    rel="noopener noreferrer"
-    class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
-  >
-    View Inspiration
-  </a>
-</div>
-{/if}
-<!-- End of Dress Code -->
-
-{#if invite.section_toggle.includes("faq")}
-<!-- Rundown -->
-<div class="relative w-full min-h-[100dvh] overflow-hidden">
-  <div class="fade-in">
-    <div class="relative z-10 min-h-[100dvh] flex flex-col items-center justify-center text-center text-white px-12 md:px-22 lg:px-32 space-y-8">
-      <p class="font-smallcaption uppercase opacity-80 mb-6">EVENT RUNDOWN</p>
-      <h1 class="font-h2 text-white mb-12">See everything we've got planned for you.<br>View our full event rundown below</h1>
-      
-      <a 
-        href="https://www.notion.so/Wedding-FAQ-152f5ed90e1447c89e5a76be413f07c7?source=copy_link"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
-      >
-        View FAQ
-      </a>
-    </div>
-  </div>
-</div>
-{/if}
-
-<!-- Our Moments -->
-{#if invite.section_toggle.includes("our-moments")}
-<div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white">
-  <div class="fade-in">
-    <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Our Moments</h1>
-    <div class="flex flex-col items-center justify-center w-full mx-auto my-6 sm:my-8 md:my-10 px-4 z-10">
-      <div class="relative w-full max-w-[280px] sm:max-w-xs aspect-[4/5] overflow-hidden">
-        {#each images as img, i}
-          <img
-            src={img}
-            alt="carousel"
-            class="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
-            class:opacity-100={i === currentIndex}
-            class:opacity-0={i !== currentIndex}
-          />
-        {/each}
-      </div>
-    </div>
-  </div>
-</div>
-{/if}
-<!-- End of Our Moments -->
-
-{#if invite.section_toggle.includes("wedding-gift")}
-<!-- Wedding Gift-->
-<div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-8 md:px-16 lg:px-28  space-y-6 sm:space-y-8 text-white fade-in">
-  <p class="font-smallcaption uppercase opacity-80 mb-6">WEDDING GIFT</p>
-  <h1 class="font-h2">A Token of Love</h1>
-
-  <h4 class="font-h3 eventtime leading-3 mb-8">For those who wish to offer us a gift of love, <br><br> please find the account details below: </h4>
-  
-  <button
-    on:click={() => (showAccount = !showAccount)}
-    class={`inline-block mt-4 px-8 py-4 uppercase text-xs sm:text-sm rounded font-button tracking-[0.15em] transition duration-300 ease-in-out 
-      ${showAccount 
-        ? 'bg-[#C7DDD8] border-transparent' 
-        : 'bg-transparent text-white border border-white hover:bg-[#b5d0c9] hover:text-black'}`}
-    style={showAccount ? 'color: #000000 !important;' : ''}
-  >
-    {showAccount ? "- HIDE ACCOUNT" : "+ VIEW ACCOUNT"}
-  </button>
-
-  {#if showAccount}
-    <div class="px-4 sm:px-6 py-6 text-white text-center w-full max-w-sm mx-auto">
-      <!-- Groom Account -->
-      <div class="mb-5 border-t border-white/20 pt-4 text-left space-y-1">
-        <div class="flex justify-between items-center">
-          <div>
-            <p class="font-smallcaption !opacity-100 !text-white uppercase">{couple?.groom_bank_name|| '-'}</p>
-            <p class="font-button uppercase">Bank:{couple?.groom_bank || '-'}</p>
-            <p class="font-h2 tracking-wider mt-2 opacity-90">{couple?.groom_bank_number || '-'}</p>
+            <p class="font-subheading uppercase text-white pb-20">
+              {formatEventDate(primaryEvent?.event_date || invite.event_date, primaryEvent?.timezone)}
+            </p>
           </div>
-          <button
-            on:click={() => copyAccountNumber(couple.groom_bank_number)}
-            class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-[#b5d0c9] hover:text-black transition"
-          > 
-            {#if copiedAccounts[couple.groom_bank_number]}
-              ✓
-            {:else}
-              Copy
-            {/if}
-          </button>
-        </div>
-      </div>
 
-      <!-- Bride Account -->
-      <div class="border-t border-white/20 pt-4 text-left space-y-1">
-        <div class="flex justify-between items-center">
-          <div>
-            <p class="font-smallcaption !opacity-100 !text-white uppercase">{couple?.bride_bank_name || '-'}</p>
-            <p class="font-smallcaption !opacity-100 !text-white uppercase">Bank:{couple?.bride_bank || '-'}</p>
-            <p class="font-h2 tracking-wider mt-2 opacity-90">{couple?.bride_bank_number || '-'}</p>
-          </div>
           <button
-            on:click={() => copyAccountNumber(couple.bride_bank_number)}
-            class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition"
+            on:click={unlockScrollAndScrollDown}
+            class="font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition text-xs sm:text-sm"
           >
-            {#if copiedAccounts[couple.bride_bank_number]}
-              ✓
-            {:else}
-              Copy
-            {/if}
+            JOIN THE CELEBRATION
           </button>
         </div>
       </div>
-    </div>
-  {/if}
-</div>
-<!--End of Wedding Gift-->
-{/if}
 
-{#if invite.section_toggle.includes("thank-you")}
-<!--Thank you-->
-<div class="relative flex flex-col items-center w-full h-[100dvh] fade-in">
-  <div class="absolute inset-0 bg-black opacity-0 z-[5] transition-opacity duration-1000 ease-in"></div>
-  
-  <div class="absolute inset-0 flex flex-col items-center text-center text-white z-10 p-6 sm:p-8 md:p-10">
-    <!-- Centered content -->
-    <div class="flex-1 flex flex-col items-center justify-center space-y-3 sm:space-y-4">
-      <p class="font-smallcaption uppercase opacity-80 mb-6">A Big Thank You</p>
-      <h1 class="font-h2 mb-6">See You Soon!</h1>
-      <h4 class="font-h3 eventtime">
-        {@html (couple?.thank_you || '-').replace(/\n/g, '<br><br>')}
-      </h4>
-    </div>
+      <!--End of Landing-->
 
-    <!-- Bottom "With Love" -->
-    <div class="absolute bottom-12 flex flex-col items-center space-y-0.5">
-      <p class="font-smallcaption uppercase">Invites From</p>
-      <a 
-        href="https://startswithlove.com" 
-        target="_blank" 
-        rel="noopener noreferrer" 
-        class="with-love opacity-90 !text-white uppercase hover:text-gray-300 transition"
-      >
-        STARTSWITHLOVE.COM
-      </a>
-    </div>
-  </div>
-</div>
-{/if}
-
+      <!--Devotions-->
+      {#if invite.section_toggle.includes("devotions")}
+      <div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-4 sm:px-6 space-y-8 sm:space-y-12"> 
+        <img src="/cross.png" alt="cross" class="w-4 h-5 sm:w-3 sm:h-4 object-fill opacity-80 fade-in">
+        <h1 class="font-h2 text-white fade-in">I have found the one whom my soul loves.</h1>
+        <p class="font-smallcaption font-bold text-white uppercase tracking-[1em] sm:tracking-[1.5em] md:tracking-[2em] opacity-90 text-xs sm:text-sm fade-in">SONG OF SOLOMON 3:4</p>
+        <div class="absolute bottom-40 left-1/2 -translate-x-1/2 w-20 h-20 flex justify-center items-center fade-in">
+        </div>
       </div>
-  </div>
-</div>
+      {/if}
+      <!--End of Devotions-->
 
+      <!--Couple-->
+      {#if invite.section_toggle.includes("groom-intro")}
+      <div class="relative flex flex-col items-center">
+        <div class="absolute inset-0 bg-black/15 z-[5]"></div>
 
-<div class="lg:hidden h-[100dvh]">
+        <!-- Background image -->
+        <img src="/groom.png" alt="Background" class="w-full h-full object-cover block">
+        <img src="/snow.gif" alt="Overlay" class="absolute inset-0 w-full h-full object-cover pointer-events-none z-10">
 
-<!--Start of Landing Page-->
-<div class="relative w-full min-h-[100dvh]">
-  <!-- Background image -->
-  <video
-    class="fixed top-0 left-0 w-full h-full object-cover z-[-1]"
-    style="height: 100%; min-height: 100%; background-color: #000; object-position: 65%;"
-    autoplay
-    muted
-    loop
-    playsinline
-  >
-    {#if videoUrl}
-      <source src={videoUrl} type="video/webm" />
-    {/if}
-    Your browser does not support the video tag.
-  </video>
+        <!-- Overlay Content -->
+        <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-3 px-4 fade-in">
+          <img src="/deco3.png" alt="Top Deco" class="w-8 sm:w-10 mb-12 opacity-90">
 
-  <!-- Dark overlay -->
-  <div class="fixed top-0 left-0 w-full h-full bg-black/50 z-[-1]"></div>
+          <div class="flex items-center space-x-4 mb-4">
+            <img src="/deco1.png" alt="Left Deco" class="w-10 sm:w-14">
+            <h4 class="font-smallcaption uppercase text-xs sm:text-sm">THE GROOM</h4>
+            <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
+          </div>
 
-  <!--Introduction-->
-  <div class="landing-section relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] fade-in">
-    <p class="font-subheading text-white uppercase pb-30">
-      Dear {guest.full_name},
-    </p>
+          <!-- Name -->
+          <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
+            {invite.groom_name}
+          </h2>
 
-    <div class="flex flex-col items-center justify-center">
-      <p class="font-subheading uppercase text-white pb-10">
-        We Invite You To Celebrate
-      </p>
-      <h1 class="font-display text-white rotate-[-6deg] text-center leading-none pb-10">
-        <p class="m-0">{name1}</p>
-        <p class="-m-3">&</p>
-        <p class="m-0">{name2}</p>
-      </h1>
+          <div class="flex flex-col items-center space-y-">
+            <h4 class="font-smallcaption uppercase text-xs sm:text-sm">
+              {invite.groom_parents}
+            </h4>
+            <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
+          </div>
+        </div>
+      </div>
+      {/if}
 
-      <p class="font-subheading uppercase text-white pb-20">
-        {formatEventDate(primaryEvent?.event_date || invite.event_date, primaryEvent?.timezone)}
-      </p>
-    </div>
+      {#if invite.section_toggle.includes("bride-intro")}
+      <div class="relative flex flex-col items-center">
+        <div class="absolute inset-0 bg-black/15 z-[5]"></div>
 
-    <button
-      on:click={unlockScrollAndScrollDown}
-      class="font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition text-xs sm:text-sm"
-    >
-      JOIN THE CELEBRATION
-    </button>
-  </div>
-</div>
+        <!-- Background image -->
+        <img src="/bride.png" alt="Background" class="w-full h-full object-cover block">
+        <img src="/snow.gif" alt="Overlay" class="absolute inset-0 w-full h-full object-cover pointer-events-none z-10">
 
-<!--End of Landing-->
+        <!-- Overlay Content -->
+        <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-3 px-4 fade-in">
+          <img src="/deco3.png" alt="Top Deco" class="w-8 sm:w-10 mb-12 opacity-90">
 
-<!--Devotions-->
-{#if invite.section_toggle.includes("devotions")}
-<div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-4 sm:px-6 space-y-8 sm:space-y-12"> 
-  <img src="/cross.png" alt="cross" class="w-4 h-5 sm:w-3 sm:h-4 object-fill opacity-80 fade-in">
-  <h1 class="font-h2 text-white fade-in">I have found the one whom my soul loves.</h1>
-  <p class="font-smallcaption font-bold text-white uppercase tracking-[1em] sm:tracking-[1.5em] md:tracking-[2em] opacity-90 text-xs sm:text-sm fade-in">SONG OF SOLOMON 3:4</p>
-  <div class="absolute bottom-40 left-1/2 -translate-x-1/2 w-20 h-20 flex justify-center items-center fade-in">
-    <!-- <div class="scale-50 opacity-80">
-      <LottieClientOnly {arrowDown} />
-    </div> -->
-  </div>
-</div>
-{/if}
-<!--End of Devotions-->
+          <div class="flex items-center space-x-4 mb-4">
+            <img src="/deco1.png" alt="Left Deco" class="w-10 sm:w-14">
+            <h4 class="font-smallcaption uppercase text-xs sm:text-sm">THE BRIDE</h4>
+            <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
+          </div>
 
-<!--Couple-->
-{#if invite.section_toggle.includes("groom-intro")}
-<div class="relative flex flex-col items-center">
-  <div class="absolute inset-0 bg-black/15 z-[5]"></div>
+          <!-- Name -->
+          <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
+            {invite.bride_name}
+          </h2>
 
-  <!-- Background image -->
-  <img src="/groom.png" alt="Background" class="w-full h-full object-cover block">
-  <img src="/snow.gif" alt="Overlay" class="absolute inset-0 w-full h-full object-cover pointer-events-none z-10">
+          <div class="flex flex-col items-center space-y-">
+            <h4 class="font-smallcaption uppercase text-xs sm:text-sm">
+              {invite.bride_parents}
+            </h4>
+            <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
+          </div>
+        </div>
+      </div>
+      {/if}
+      <!--End of Couple-->
 
-  <!-- Overlay Content -->
-  <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-3 px-4 fade-in">
-    <img src="/deco3.png" alt="Top Deco" class="w-8 sm:w-10 mb-12 opacity-90">
-
-    <div class="flex items-center space-x-4 mb-4">
-      <img src="/deco1.png" alt="Left Deco" class="w-10 sm:w-14">
-      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">THE GROOM</h4>
-      <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
-    </div>
-
-    <!-- Name -->
-    <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
-      {invite.groom_name}
-    </h2>
-
-    <div class="flex flex-col items-center space-y-">
-      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">
-        {invite.groom_parents}
-      </h4>
-      <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
-    </div>
-  </div>
-</div>
-{/if}
-
-{#if invite.section_toggle.includes("bride-intro")}
-<div class="relative flex flex-col items-center">
-  <div class="absolute inset-0 bg-black/15 z-[5]"></div>
-
-  <!-- Background image -->
-  <img src="/bride.png" alt="Background" class="w-full h-full object-cover block">
-  <img src="/snow.gif" alt="Overlay" class="absolute inset-0 w-full h-full object-cover pointer-events-none z-10">
-
-  <!-- Overlay Content -->
-  <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-3 px-4 fade-in">
-    <img src="/deco3.png" alt="Top Deco" class="w-8 sm:w-10 mb-12 opacity-90">
-
-    <div class="flex items-center space-x-4 mb-4">
-      <img src="/deco1.png" alt="Left Deco" class="w-10 sm:w-14">
-      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">THE BRIDE</h4>
-      <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
-    </div>
-
-    <!-- Name -->
-    <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
-      {invite.bride_name}
-    </h2>
-
-    <div class="flex flex-col items-center space-y-">
-      <h4 class="font-smallcaption uppercase text-xs sm:text-sm">
-        {invite.bride_parents}
-      </h4>
-      <img src="/deco4.png" alt="Bottom Deco" class="w-8 sm:w-6 mt-12">
-    </div>
-  </div>
-</div>
-{/if}
-<!--End of Couple-->
-
-<!-- Events -->
-<div class="flex flex-col events-section min-h-[100dvh] items-center justify-center text-center px-8 sm:px-10 md:px-12 py-10 sm:py-12 md:py-14 text-white">
-  {#each events as event, index}
-    <!-- Check if this event type should be shown based on section_toggle -->
-    {#if invite.section_toggle.includes(event.event_type) || invite.section_toggle.includes("events")}
-      <div class="mb-14 w-full fade-in" class:mb-12={index === events.length - 1}>
+      <!-- Events -->
+      <div class="flex flex-col events-section min-h-[100dvh] items-center justify-center text-center px-8 sm:px-10 md:px-12 py-10 sm:py-12 md:py-14 text-white">
+        {#each events as event, index}
+          <!-- Check if this event type should be shown based on section_toggle -->
+          {#if invite.section_toggle.includes(event.event_type) || invite.section_toggle.includes("events")}
+            <div class="mb-14 w-full fade-in" class:mb-12={index === events.length - 1}>
+              
+              <!-- Show "Event" label only for the first event -->
+              {#if index === 0}
+                <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
+              {/if}
+              
+              <!-- Dynamic Event Title -->
+              <h2 class="font-h2 mb-3 capitalize">
+                {event.event_type.replace('-', ' ')}
+              </h2>
+              <hr class="mb-6 border-t-2 border-white/50">
+              
+              <!-- Dynamic Date and Time -->
+              <div class="">
+                <p class="font-h3">
+                  {formatEventDate(event.event_date, event.timezone)}
+                </p>
+                <p class="font-h3 eventtime mb-6">
+                  {formatEventTimeRange(event.start_time, event.end_time, event.timezone)}
+                </p>
+              </div>
+              
+              <!-- Dynamic Location -->
+              <p class="font-h3 sm:text-xl md:text-2xl mb-6">
+                {event.location}
+              </p>
+              
+              <!-- Dynamic Location Button -->
+              <div class="space-y-4">
+                <a  
+                  href="https://www.google.com/maps?q={encodeURIComponent(event.location)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase mr-4"
+                >
+                  + View Location
+                </a>
+                
+                <!-- Individual Calendar Button for each event -->
+                {#if event.calendarUrl}
+                  <button
+                    on:click={() => handleCalendarClick(event, event.calendarUrl)}
+                    class="calendar-button inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
+                  >
+                    <svg 
+                      class="calendar-icon" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
+                      <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/>
+                      <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/>
+                      <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    + Add {event.event_type.replace('-', ' ')} to Calendar
+                  </button>
+                {/if}
+              </div>
+            </div>
+          {/if}
+        {/each}
         
-        <!-- Show "Event" label only for the first event -->
-        {#if index === 0}
-          <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
+        <!-- Fallback: Show message if no events match section_toggle -->
+        {#if events.length === 0 || !events.some(event => invite.section_toggle.includes(event.event_type))}
+          <div class="w-full fade-in">
+            <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
+            <h2 class="font-h2 mb-2">Coming Soon</h2>
+            <hr class="mb-6">
+            <p class="font-h3">Event details will be updated soon.</p>
+          </div>
+        {/if}
+      </div>
+      <!-- End of Events -->
+
+      {#if invite.section_toggle.includes("countdown")}
+      <!--Countdown-->
+      <div class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16">
+        <h1 class="font-h2 text-white mb-10 sm:mb-14 md:mb-22 fade-in">Until Our Celebration</h1>
+        {#if images.length > 0}
+          <img
+            src={images[currentIndex]}
+            alt="Countdown slideshow"
+            class="mb-10 max-h-[35vh] sm:max-h-[40vh] md:max-h-[50vh] w-auto max-w-[80%] sm:max-w-[70%] md:max-w-[60%] object-contain mx-auto transition-opacity duration-700"
+          />
+        {:else}
+          <p class="font-smallcaption text-white">Loading images...</p>
         {/if}
         
-        <!-- Dynamic Event Title -->
-        <h2 class="font-h2 mb-3 capitalize">
-          {event.event_type.replace('-', ' ')}
-        </h2>
-        <hr class="mb-6 border-t-2 border-white/50">
-        
-        <!-- Dynamic Date and Time -->
-        <div class="">
-          <p class="font-h3">
-            {formatEventDate(event.event_date, event.timezone)}
-          </p>
-          <p class="font-h3 eventtime mb-6">
-            {formatEventTimeRange(event.start_time, event.end_time, event.timezone)}
-          </p>
+        <div class="flex justify-center mb-12 fade-in">
+          <div class="grid grid-cols-4 gap-6 text-center justify-center items-center">
+            <!-- Days -->
+            <div class="flex flex-col items-center">
+              <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{days}</div>
+              <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Days</div>
+            </div>
+
+            <!-- Hours -->
+            <div class="flex flex-col items-center">
+              <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{hours.toString().padStart(2, '0')}</div>
+              <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Hours</div>
+            </div>
+
+            <!-- Minutes -->
+            <div class="flex flex-col items-center">
+              <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{minutes.toString().padStart(2, '0')}</div>
+              <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Mins</div>
+            </div>
+
+            <!-- Seconds -->
+            <div class="flex flex-col items-center">
+              <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{seconds.toString().padStart(2, '0')}</div>
+              <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Secs</div>
+            </div>
+          </div>
         </div>
         
-        <!-- Dynamic Location -->
-        <p class="font-h3 sm:text-xl md:text-2xl mb-6">
-          {event.location}
-        </p>
-        
-        <!-- Dynamic Location Button -->
-        <div class="space-y-4">
-          <a  
-            href="https://www.google.com/maps?q={encodeURIComponent(event.location)}"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase mr-4"
+        <!-- Enhanced Save the Date Button with Calendar Integration -->
+        {#if primaryCalendarUrl}
+          <button
+            on:click={() => handleCalendarClick(primaryEvent, primaryCalendarUrl)}
+            class="calendar-button inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
           >
-            + View Location
-          </a>
-          
-          <!-- Individual Calendar Button for each event -->
-          {#if event.calendarUrl}
-            <button
-              on:click={() => handleCalendarClick(event, event.calendarUrl)}
-              class="calendar-button inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
+            <svg 
+              class="calendar-icon" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              xmlns="http://www.w3.org/2000/svg"
             >
-              <svg 
-                class="calendar-icon" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
-                <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/>
-                <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/>
-                <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/>
-              </svg>
-              + Add {event.event_type.replace('-', ' ')} to Calendar
-            </button>
-          {/if}
-        </div>
-      </div>
-    {/if}
-  {/each}
-  
-  <!-- Fallback: Show message if no events match section_toggle -->
-  {#if events.length === 0 || !events.some(event => invite.section_toggle.includes(event.event_type))}
-    <div class="w-full fade-in">
-      <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
-      <h2 class="font-h2 mb-2">Coming Soon</h2>
-      <hr class="mb-6">
-      <p class="font-h3">Event details will be updated soon.</p>
-    </div>
-  {/if}
-</div>
-<!-- End of Events -->
-
-{#if invite.section_toggle.includes("countdown")}
-<!--Countdown-->
-<div class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16">
-  <h1 class="font-h2 text-white mb-10 sm:mb-14 md:mb-22 fade-in">Until Our Celebration</h1>
-  {#if images.length > 0}
-    <img
-      src={images[currentIndex]}
-      alt="Countdown slideshow"
-      class="mb-10 max-h-[35vh] sm:max-h-[40vh] md:max-h-[50vh] w-auto max-w-[80%] sm:max-w-[70%] md:max-w-[60%] object-contain mx-auto transition-opacity duration-700"
-    />
-  {:else}
-    <p class="font-smallcaption text-white">Loading images...</p>
-  {/if}
-  
-  <div class="flex justify-center mb-12 fade-in">
-    <div class="grid grid-cols-4 gap-6 text-center justify-center items-center">
-      <!-- Days -->
-      <div class="flex flex-col items-center">
-        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{days}</div>
-        <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Days</div>
-      </div>
-
-      <!-- Hours -->
-      <div class="flex flex-col items-center">
-        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{hours.toString().padStart(2, '0')}</div>
-        <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Hours</div>
-      </div>
-
-      <!-- Minutes -->
-      <div class="flex flex-col items-center">
-        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{minutes.toString().padStart(2, '0')}</div>
-        <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Mins</div>
-      </div>
-
-      <!-- Seconds -->
-      <div class="flex flex-col items-center">
-        <div class="font-h2 countdown leading-none mb-4 sm:mb-5 md:mb-6 text-white">{seconds.toString().padStart(2, '0')}</div>
-        <div class="font-smallcaption font-bold uppercase opacity-90 text-white text-xs sm:text-sm">Secs</div>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Enhanced Save the Date Button with Calendar Integration -->
-  {#if primaryCalendarUrl}
-    <button
-      on:click={() => handleCalendarClick(primaryEvent, primaryCalendarUrl)}
-      class="calendar-button inline-block font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
-    >
-      <svg 
-        class="calendar-icon" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
-        <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/>
-        <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/>
-        <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/>
-      </svg>
-      Save the Date
-    </button>
-  {:else}
-    <!-- Fallback if no calendar URL is available -->
-    <div class="inline-block font-button text-white px-8 py-4 border border-white/50 rounded-full opacity-50 uppercase">
-      Save the Date (Coming Soon)
-    </div>
-  {/if}
-</div>
-<!--End of Countdown-->
-{/if}
-
-<!-- RSVP -->
-<div class="">  
-  <PersonalRsvp 
-    guestSlug={$page.params.guestSlug} 
-    guest={data.guest}
-    invite={data.invite}
-  />
-</div>
-<!-- End of RSVP -->
-
-<!-- Wishes -->
-{#if invite.section_toggle.includes("wishes")}
-<div class="relative w-full min-h-[100dvh] wishes-section overflow-hidden">
-  <div class="fade-in">
-    <Wishes />
-  </div>
-</div>
-{/if}
-<!-- End of Wishes -->
-
-<!-- Dress Code -->
-{#if invite.section_toggle.includes("dress-code")}
-<div class="relative w-full min-h-[100dvh] z-10 flex flex-col items-center justify-center text-center px-6 overflow-hidden">
-  <div class="fade-in">
-    <!-- Content overlay -->
-    <div class="text-white">
-      <p class="font-smallcaption uppercase opacity-80 mb-6">WHAT TO WEAR</p>
-      
-      <p class="font-h2 text-white mb-6">
-        We kindly request our guests to wear these colors for our special day.
-      </p>
-
-      <!-- Swatches -->
-      <div class="flex justify-center space-x-4 pt-2 mb-12">
-        {#each colorSwatches as color}
-          <div
-            class="w-10 h-10 rounded-full shadow-lg"
-            style="background-color: {color}"
-          />
-        {/each}
-      </div>
-    </div>
-  </div>
-  <a 
-    href="https://www.instagram.com/reel/DMAlgiSTamH/?igsh=MWwya2NxMnB6bTB4dw=="
-    target="_blank"
-    rel="noopener noreferrer"
-    class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
-  >
-    View Inspiration
-  </a>
-</div>
-{/if}
-<!-- End of Dress Code -->
-
-{#if invite.section_toggle.includes("faq")}
-<!-- Rundown -->
-<div class="relative w-full min-h-[100dvh] overflow-hidden">
-  <div class="fade-in">
-    <div class="relative z-10 min-h-[100dvh] flex flex-col items-center justify-center text-center text-white px-6 space-y-8">
-      <p class="font-smallcaption uppercase opacity-80 mb-6">EVENT RUNDOWN</p>
-      <h1 class="font-h2 text-white mb-12">See everything we've got planned for you.<br><br>View our full event rundown below</h1>
-      
-      <a 
-        href="https://www.notion.so/Wedding-FAQ-152f5ed90e1447c89e5a76be413f07c7?source=copy_link"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
-      >
-        View FAQ
-      </a>
-    </div>
-  </div>
-</div>
-{/if}
-
-<!-- Our Moments -->
-{#if invite.section_toggle.includes("our-moments")}
-<div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white">
-  <div class="fade-in">
-    <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Our Moments</h1>
-    <div class="flex flex-col items-center justify-center w-full mx-auto my-6 sm:my-8 md:my-10 px-4 z-10">
-      <div class="relative w-full max-w-[280px] sm:max-w-xs aspect-[4/5] overflow-hidden">
-        {#each images as img, i}
-          <img
-            src={img}
-            alt="carousel"
-            class="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
-            class:opacity-100={i === currentIndex}
-            class:opacity-0={i !== currentIndex}
-          />
-        {/each}
-      </div>
-    </div>
-  </div>
-</div>
-{/if}
-<!-- End of Our Moments -->
-
-{#if invite.section_toggle.includes("wedding-gift")}
-<!-- Wedding Gift-->
-<div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white fade-in">
-  <p class="font-smallcaption uppercase opacity-80 mb-6">WEDDING GIFT</p>
-  <h1 class="font-h2">A Token of Love</h1>
-
-  <!-- <h4 class="font-h3 eventtime leading-3 mb-8">For those who wish to offer us a gift of love, <br><br> please find the account details below: </h4> -->
-  <h4 class="font-h3 eventtime leading-6 mb-8">{@html formattedGiftNote}</h4>
-  <button
-    on:click={() => (showAccount = !showAccount)}
-    class={`inline-block mt-4 px-8 py-4 uppercase text-xs sm:text-sm rounded font-button tracking-[0.15em] transition duration-300 ease-in-out 
-      ${showAccount 
-        ? 'bg-[#C7DDD8] border-transparent' 
-        : 'bg-transparent text-white border border-white hover:bg-[#C7DDD8] hover:text-black'}`}
-    style={showAccount ? 'color: #000000 !important;' : ''}
-  >
-    {showAccount ? "- HIDE ACCOUNT" : "+ VIEW ACCOUNT"}
-  </button>
-
-  {#if showAccount}
-    <div class="px-4 sm:px-6 py-6 text-white text-center w-full max-w-sm mx-auto">
-      <!-- Groom Account -->
-      <div class="mb-5 border-t border-white/20 pt-4 text-left space-y-1">
-        <div class="flex justify-between items-center">
-          <div>
-            <p class="font-smallcaption !opacity-100 !text-white uppercase">{couple?.groom_bank_name|| '-'}</p>
-            <p class="font-button uppercase">Bank:{couple?.groom_bank || '-'}</p>
-            <p class="font-h2 tracking-wider mt-2 opacity-90">{couple?.groom_bank_number || '-'}</p>
-          </div>
-          <button
-            on:click={() => copyAccountNumber(couple.groom_bank_number)}
-            class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition"
-          > 
-            {#if copiedAccounts[couple.groom_bank_number]}
-              ✓
-            {:else}
-              Copy
-            {/if}
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
+              <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/>
+              <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/>
+              <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            Save the Date
           </button>
-        </div>
-      </div>
-
-      <!-- Bride Account -->
-      <div class="border-t border-white/20 pt-4 text-left space-y-1">
-        <div class="flex justify-between items-center">
-          <div>
-            <p class="font-smallcaption !opacity-100 !text-white uppercase">{couple?.bride_bank_name || '-'}</p>
-            <p class="font-smallcaption !opacity-100 !text-white uppercase">Bank:{couple?.bride_bank || '-'}</p>
-            <p class="font-h2 tracking-wider mt-2 opacity-90">{couple?.bride_bank_number || '-'}</p>
+        {:else}
+          <!-- Fallback if no calendar URL is available -->
+          <div class="inline-block font-button text-white px-8 py-4 border border-white/50 rounded-full opacity-50 uppercase">
+            Save the Date (Coming Soon)
           </div>
-          <button
-            on:click={() => copyAccountNumber(couple.bride_bank_number)}
-            class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition"
-          >
-            {#if copiedAccounts[couple.bride_bank_number]}
-              ✓
-            {:else}
-              Copy
-            {/if}
-          </button>
+        {/if}
+      </div>
+      <!--End of Countdown-->
+      {/if}
+
+      <!-- RSVP -->
+      <div class="">  
+        <PersonalRsvp 
+          guestSlug={$page.params.guestSlug} 
+          guest={data.guest}
+          invite={data.invite}
+        />
+      </div>
+      <!-- End of RSVP -->
+
+      <!-- Wishes -->
+      {#if invite.section_toggle.includes("wishes")}
+      <div class="relative w-full min-h-[100dvh] wishes-section overflow-hidden">
+        <div class="fade-in">
+          <Wishes />
         </div>
       </div>
-    </div>
-  {/if}
-</div>
-<!--End of Wedding Gift-->
-{/if}
+      {/if}
+      <!-- End of Wishes -->
 
-{#if invite.section_toggle.includes("thank-you")}
-<!--Thank you-->
-<div class="relative flex flex-col items-center w-full h-[100dvh] fade-in">
-  <div class="absolute inset-0 bg-black opacity-0 z-[5] transition-opacity duration-1000 ease-in"></div>
-  
-  <div class="absolute inset-0 flex flex-col items-center text-center text-white z-10 p-6 sm:p-8 md:p-10">
-    <!-- Centered content -->
-    <div class="flex-1 flex flex-col items-center justify-center space-y-3 sm:space-y-4">
-      <p class="font-smallcaption uppercase opacity-80 mb-6">A Big Thank You</p>
-      <h1 class="font-h2 mb-6">See You Soon!</h1>
-      <h4 class="font-h3 eventtime">
-        {@html (couple?.thank_you || '-').replace(/\n/g, '<br><br>')}
-      </h4>
-    </div>
+      <!-- Dress Code -->
+      {#if invite.section_toggle.includes("dress-code")}
+      <div class="relative w-full min-h-[100dvh] z-10 flex flex-col items-center justify-center text-center px-6 overflow-hidden">
+        <div class="fade-in">
+          <!-- Content overlay -->
+          <div class="text-white">
+            <p class="font-smallcaption uppercase opacity-80 mb-6">WHAT TO WEAR</p>
+            
+            <p class="font-h2 text-white mb-6">
+              We kindly request our guests to wear these colors for our special day.
+            </p>
 
-    <!-- Bottom "With Love" -->
-    <div class="absolute bottom-12 flex flex-col items-center space-y-0.5">
-      <p class="font-smallcaption with-love uppercase">Invites From</p>
-      <a 
-        href="https://startswithlove.com" 
-        target="_blank" 
-        rel="noopener noreferrer" 
-        class="with-love opacity-90 !text-white uppercase hover:text-gray-300 transition"
-      >
-        STARTSWITHLOVE.COM
-      </a>
+            <!-- Swatches -->
+            <div class="flex justify-center space-x-4 pt-2 mb-12">
+              {#each colorSwatches as color}
+                <div
+                  class="w-10 h-10 rounded-full shadow-lg"
+                  style="background-color: {color}"
+                />
+              {/each}
+            </div>
+          </div>
+        </div>
+        <a 
+          href="https://www.instagram.com/reel/DMAlgiSTamH/?igsh=MWwya2NxMnB6bTB4dw=="
+          target="_blank"
+          rel="noopener noreferrer"
+          class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
+        >
+          View Inspiration
+        </a>
+      </div>
+      {/if}
+      <!-- End of Dress Code -->
+
+      {#if invite.section_toggle.includes("faq")}
+      <!-- Rundown -->
+      <div class="relative w-full min-h-[100dvh] overflow-hidden">
+        <div class="fade-in">
+          <div class="relative z-10 min-h-[100dvh] flex flex-col items-center justify-center text-center text-white px-6 space-y-8">
+            <p class="font-smallcaption uppercase opacity-80 mb-6">EVENT RUNDOWN</p>
+            <h1 class="font-h2 text-white mb-12">See everything we've got planned for you.</h1>
+            
+            <a 
+              href="https://www.notion.so/Wedding-FAQ-152f5ed90e1447c89e5a76be413f07c7?source=copy_link"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
+            >
+              View FAQ
+            </a>
+          </div>
+        </div>
+      </div>
+      {/if}
+
+      <!-- Our Moments -->
+      {#if invite.section_toggle.includes("our-moments")}
+      <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white">
+        <div class="fade-in">
+          <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Our Moments</h1>
+          <div class="flex flex-col items-center justify-center w-full mx-auto my-6 sm:my-8 md:my-10 px-4 z-10">
+            <div class="relative w-full max-w-[280px] sm:max-w-xs aspect-[4/5] overflow-hidden">
+              {#each images as img, i}
+                <img
+                  src={img}
+                  alt="carousel"
+                  class="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+                  class:opacity-100={i === currentIndex}
+                  class:opacity-0={i !== currentIndex}
+                />
+              {/each}
+            </div>
+          </div>
+        </div>
+      </div>
+      {/if}
+      <!-- End of Our Moments -->
+
+      {#if invite.section_toggle.includes("wedding-gift")}
+      <!-- Wedding Gift-->
+      <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white fade-in">
+        <p class="font-smallcaption uppercase opacity-80 mb-6">WEDDING GIFT</p>
+        <h1 class="font-h2">A Token of Love</h1>
+
+        <h4 class="font-h3 eventtime leading-6 mb-8">{@html formattedGiftNote}</h4>
+        <button
+          on:click={() => (showAccount = !showAccount)}
+          class={`inline-block mt-4 px-8 py-4 uppercase text-xs sm:text-sm rounded font-button tracking-[0.15em] transition duration-300 ease-in-out 
+            ${showAccount 
+              ? 'bg-[#C7DDD8] border-transparent' 
+              : 'bg-transparent text-white border border-white hover:bg-[#C7DDD8] hover:text-black'}`}
+          style={showAccount ? 'color: #000000 !important;' : ''}
+        >
+          {showAccount ? "- HIDE ACCOUNT" : "+ VIEW ACCOUNT"}
+        </button>
+
+        {#if showAccount}
+          <div class="px-4 sm:px-6 py-6 text-white text-center w-full max-w-sm mx-auto">
+            <!-- Groom Account -->
+            <div class="mb-5 border-t border-white/20 pt-4 text-left space-y-1">
+              <div class="flex justify-between items-center">
+                <div>
+                  <p class="font-smallcaption !opacity-100 !text-white uppercase">{couple?.groom_bank_name|| '-'}</p>
+                  <p class="font-button uppercase">Bank:{couple?.groom_bank || '-'}</p>
+                  <p class="font-h2 tracking-wider mt-2 opacity-90">{couple?.groom_bank_number || '-'}</p>
+                </div>
+                <button
+                  on:click={() => copyAccountNumber(couple.groom_bank_number)}
+                  class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition"
+                > 
+                  {#if copiedAccounts[couple.groom_bank_number]}
+                    ✓
+                  {:else}
+                    Copy
+                  {/if}
+                </button>
+              </div>
+            </div>
+
+            <!-- Bride Account -->
+            <div class="border-t border-white/20 pt-4 text-left space-y-1">
+              <div class="flex justify-between items-center">
+                <div>
+                  <p class="font-smallcaption !opacity-100 !text-white uppercase">{couple?.bride_bank_name || '-'}</p>
+                  <p class="font-smallcaption !opacity-100 !text-white uppercase">Bank:{couple?.bride_bank || '-'}</p>
+                  <p class="font-h2 tracking-wider mt-2 opacity-90">{couple?.bride_bank_number || '-'}</p>
+                </div>
+                <button
+                  on:click={() => copyAccountNumber(couple.bride_bank_number)}
+                  class="font-button font-bold uppercase border text-center border-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition"
+                >
+                  {#if copiedAccounts[couple.bride_bank_number]}
+                    ✓
+                  {:else}
+                    Copy
+                  {/if}
+                </button>
+              </div>
+            </div>
+          </div>
+        {/if}
+      </div>
+      <!--End of Wedding Gift-->
+      {/if}
+
+      {#if invite.section_toggle.includes("thank-you")}
+      <!--Thank you-->
+      <div class="relative flex flex-col items-center w-full h-[100dvh] fade-in">
+        <div class="absolute inset-0 bg-black opacity-0 z-[5] transition-opacity duration-1000 ease-in"></div>
+        
+        <div class="absolute inset-0 flex flex-col items-center text-center text-white z-10 p-6 sm:p-8 md:p-10">
+          <!-- Centered content -->
+          <div class="flex-1 flex flex-col items-center justify-center space-y-3 sm:space-y-4">
+            <p class="font-smallcaption uppercase opacity-80 mb-6">A Big Thank You</p>
+            <h1 class="font-h2 mb-6">See You Soon!</h1>
+            <h4 class="font-h3 eventtime">
+              {@html (couple?.thank_you || '-').replace(/\n/g, '<br><br>')}
+            </h4>
+          </div>
+
+          <!-- Bottom "With Love" -->
+          <div class="absolute bottom-12 flex flex-col items-center space-y-0.5">
+            <p class="font-smallcaption with-love uppercase">Invites From</p>
+            <a 
+              href="https://startswithlove.com" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              class="with-love opacity-90 !text-white uppercase hover:text-gray-300 transition"
+            >
+              STARTSWITHLOVE.COM
+            </a>
+          </div>
+        </div>
+      </div>
+      {/if}
     </div>
   </div>
-</div>
 {/if}
-</div>

@@ -1,9 +1,8 @@
-<script>
+<!-- <script>
   import { onMount } from 'svelte';
-  import { supabase } from '$lib/supabaseClient';
-  
-   const cyclingWords = ['Love', 'Family','Moments', 'Memories','Promises','Together','Always','Forever'];
- 
+
+  const cyclingWords = ['Love', 'Family','Moments', 'Memories','Promises','Together','Always','Forever'];
+  const finalWord = {'Eddie & Vania'};
 
   let currentWord = cyclingWords[0];
   let progress = 0;
@@ -16,18 +15,6 @@
   let speed = 400;
 
   let buttonVisible = false;
-
-   export let data;
-
-  if (!data || !data.guest || !data.invite) {
-    throw new Error("Missing guest or invite data");
-  }
-
-  const invite = data.invite;
-  const guest = data.guest;
-
-
-  const finalWord = invite.client_name;
 
 $: if (showButton) {
   setTimeout(() => {
@@ -137,4 +124,58 @@ $: if (showButton) {
     {/if}
     
   </div>
-{/if}
+{/if} -->
+
+<script>
+  export let invites = { client_name: "Client" };
+  import { onMount, onDestroy } from 'svelte';
+
+  let progress = 0;
+  let interval;
+
+  // Simulate loading progress
+  onMount(() => {
+    interval = setInterval(() => {
+      if (progress < 100) {
+        progress += 1;
+      } else {
+        clearInterval(interval);
+      }
+    }, 30); // speed of loading
+  });
+
+  onDestroy(() => {
+    clearInterval(interval);
+  });
+</script>
+
+<style>
+  .loading-screen {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    background: black;
+    color: white;
+    font-family: sans-serif;
+  }
+
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  p {
+    font-size: 1.5rem;
+  }
+</style>
+
+<div class="loading-screen">
+  <h1>{invites.client_name}</h1>
+  <p>{progress}%</p>
+</div>
+
+
+
