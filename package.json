@@ -33,6 +33,7 @@
 		"lottie-web": "^5.13.0",
 		"motion": "^12.23.11",
 		"papaparse": "^5.5.3",
+		"qr-scanner": "^1.4.2",
 		"qrcode": "^1.5.4",
 		"svelte-lottie": "^0.0.0",
 		"swiper": "^11.2.10",

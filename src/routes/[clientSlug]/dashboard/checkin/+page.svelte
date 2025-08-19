@@ -1,28 +1,32 @@
 <script>
-import { onMount } from 'svelte';
-import { Html5Qrcode, Html5QrcodeScanType } from 'html5-qrcode';
+import { onMount, onDestroy } from 'svelte';
+import QrScanner from 'qr-scanner';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import { supabase } from '$lib/supabaseClient';
 
 let errorMessage = '';
 let loading = false;
-let html5QrCode = null;
+let qrScanner = null;
+let videoElement = null;
 let clientData = null;
 let clientSlug = '';
-let isScanning = false;
-let isTransitioning = false;
+let isProcessing = false;
 
-async function onScanSuccess(decodedText) {
-	if (loading || isTransitioning) return;
-	console.log("QR Code detected:", decodedText);
+async function onScanSuccess(result) {
+	if (loading || isProcessing) return;
+	
+	console.log("QR Code detected:", result.data);
+	isProcessing = true;
 	loading = true;
 
-	// Stop the scanner immediately after successful scan
-	await safeStopScanner();
+	// Stop the scanner temporarily
+	if (qrScanner) {
+		qrScanner.stop();
+	}
 
 	try {
-		const guestId = decodedText.trim();
+		const guestId = result.data.trim();
 		console.log("Looking up guest with ID:", guestId);
 
 		// Look up guest information from database
@@ -42,34 +46,18 @@ async function onScanSuccess(decodedText) {
 
 		if (error) {
 			console.error('Database error:', error);
-			errorMessage = `Guest not found: ${error.message}`;
-			loading = false;
-			// Wait before restarting to avoid state conflicts
-			setTimeout(() => {
-				errorMessage = '';
-				startScanner();
-			}, 2000);
+			showErrorAndRestart(`Guest not found: ${error.message}`);
 			return;
 		}
 
 		if (!guest) {
-			errorMessage = 'Invalid QR code - guest not found';
-			loading = false;
-			setTimeout(() => {
-				errorMessage = '';
-				startScanner();
-			}, 2000);
+			showErrorAndRestart('Invalid QR code - guest not found');
 			return;
 		}
 
 		// Check if guest actually RSVP'd yes
 		if (!guest.rsvp_status) {
-			errorMessage = `${guest.full_name} has not confirmed attendance`;
-			loading = false;
-			setTimeout(() => {
-				errorMessage = '';
-				startScanner();
-			}, 2000);
+			showErrorAndRestart(`${guest.full_name} has not confirmed attendance`);
 			return;
 		}
 
@@ -77,131 +65,70 @@ async function onScanSuccess(decodedText) {
 		goto(`/${clientSlug}/dashboard/form/${guest.guest_id}`);
 	} catch (err) {
 		console.error('Error looking up guest:', err);
-		errorMessage = `Error: ${err.message}`;
-		loading = false;
-		setTimeout(() => {
-			errorMessage = '';
-			startScanner();
-		}, 2000);
+		showErrorAndRestart(`Error: ${err.message}`);
 	}
 }
 
-function onScanFailure(error) {
-	// Optional: console.warn(`QR scan failed: ${error}`);
-}
-
-async function safeStopScanner() {
-	if (!html5QrCode || isTransitioning) return;
+function showErrorAndRestart(message) {
+	errorMessage = message;
+	loading = false;
+	isProcessing = false;
 	
-	try {
-		isTransitioning = true;
-		const state = html5QrCode.getState();
-		
-		// State 2 = scanning, State 1 = not started
-		if (state === 2) {
-			await html5QrCode.stop();
-			isScanning = false;
-		}
-	} catch (err) {
-		console.error('Error stopping scanner:', err);
-	} finally {
-		isTransitioning = false;
-	}
+	// Auto-restart after 3 seconds
+	setTimeout(() => {
+		errorMessage = '';
+		startScanner();
+	}, 3000);
 }
 
 async function startScanner() {
-	if (isScanning || isTransitioning) return;
-	
-	const qrRegionId = "reader";
-	
+	if (!videoElement || qrScanner) return;
+
 	try {
-		isTransitioning = true;
-		
-		// Initialize scanner if not exists
-		if (!html5QrCode) {
-			html5QrCode = new Html5Qrcode(qrRegionId);
-		}
-
-		// Check current state and stop if needed
-		try {
-			const state = html5QrCode.getState();
-			if (state === 2) {
-				await html5QrCode.stop();
-				// Wait for stop to complete
-				await new Promise(resolve => setTimeout(resolve, 500));
+		qrScanner = new QrScanner(
+			videoElement,
+			onScanSuccess,
+			{
+				returnDetailedScanResult: true,
+				highlightScanRegion: false,
+				highlightCodeOutline: false,
+				preferredCamera: 'environment',
+				maxScansPerSecond: 5,
 			}
-		} catch (err) {
-			// Scanner might not be initialized, continue
-		}
+		);
 
-		const cameras = await Html5Qrcode.getCameras();
-		if (cameras && cameras.length) {
-			await html5QrCode.start(
-				{ 
-					facingMode: "environment",
-					// Request higher resolution from camera
-					width: { ideal: 1920, min: 1280 },
-					height: { ideal: 1080, min: 720 }
-				},
-				{
-					fps: 10,
-					qrbox: function(viewfinderWidth, viewfinderHeight) {
-						// Large detection area for better scanning
-						const size = Math.min(viewfinderWidth, viewfinderHeight) * 0.7;
-						return { width: size, height: size };
-					},
-					aspectRatio: 1.7778
-				},
-				onScanSuccess,
-				onScanFailure
-			);
-
-			isScanning = true;
-			
-			// Force resize after initialization but preserve detection
-			setTimeout(() => {
-				forceVideoFullscreen();
-			}, 200);
-			
-		} else {
-			errorMessage = "No camera found";
-		}
+		await qrScanner.start();
+		isProcessing = false;
+		
 	} catch (err) {
-		errorMessage = "Camera access error: " + err.message;
-		console.error('Scanner start error:', err);
-		isScanning = false;
-	} finally {
-		isTransitioning = false;
+		console.error('Failed to start QR scanner:', err);
+		
+		if (err.name === 'NotAllowedError') {
+			errorMessage = 'Camera permission denied. Please allow camera access and refresh the page.';
+		} else if (err.name === 'NotFoundError') {
+			errorMessage = 'No camera found on this device.';
+		} else if (err.name === 'NotSupportedError') {
+			errorMessage = 'Camera not supported on this device.';
+		} else {
+			errorMessage = `Camera error: ${err.message || 'Unknown error'}`;
+		}
 	}
 }
 
-// Function to gently force fullscreen without breaking detection
-function forceVideoFullscreen() {
-	if (!isScanning) return;
-	
-	const videos = document.querySelectorAll('#reader video');
-	const containers = document.querySelectorAll('#reader > div');
-	
-	videos.forEach(video => {
-		if (video) {
-			video.style.setProperty('width', '100vw', 'important');
-			video.style.setProperty('height', '100vh', 'important');
-			video.style.setProperty('object-fit', 'cover', 'important');
-			video.style.setProperty('position', 'fixed', 'important');
-			video.style.setProperty('top', '0', 'important');
-			video.style.setProperty('left', '0', 'important');
-		}
-	});
-	
-	containers.forEach(container => {
-		if (container) {
-			container.style.setProperty('width', '100vw', 'important');
-			container.style.setProperty('height', '100vh', 'important');
-			container.style.setProperty('position', 'fixed', 'important');
-			container.style.setProperty('top', '0', 'important');
-			container.style.setProperty('left', '0', 'important');
-		}
-	});
+async function stopScanner() {
+	if (qrScanner) {
+		qrScanner.destroy();
+		qrScanner = null;
+	}
+}
+
+async function retryScanner() {
+	errorMessage = '';
+	await stopScanner();
+	// Small delay before restarting
+	setTimeout(() => {
+		startScanner();
+	}, 500);
 }
 
 onMount(async () => {
@@ -222,20 +149,20 @@ onMount(async () => {
 		}
 
 		clientData = invite;
+		
+		// Start scanner after a short delay to ensure video element is ready
+		setTimeout(() => {
+			startScanner();
+		}, 100);
+		
 	} catch (err) {
 		console.error('Error loading client:', err);
 		errorMessage = 'Failed to load client data';
-		return;
 	}
+});
 
-	// Start scanner with delay to ensure DOM is ready
-	setTimeout(() => {
-		startScanner();
-	}, 100);
-	
-	return async () => {
-		await safeStopScanner();
-	};
+onDestroy(() => {
+	stopScanner();
 });
 </script>
 
@@ -250,35 +177,24 @@ onMount(async () => {
 	overflow: hidden;
 }
 
-/* Targeted fullscreen camera fix for html5-qrcode */
-#reader, 
-#reader video {
-	position: fixed !important;
-	top: 0 !important;
-	left: 0 !important;
-	width: 100vw !important;
-	height: 100vh !important;
-	object-fit: cover !important;
-	background: black !important;
+.scanner-container {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	background: black;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1;
 }
 
-/* Kill the library's inner containers */
-#reader > div,
-#reader > div > div {
-	position: fixed !important;
-	top: 0 !important;
-	left: 0 !important;
-	width: 100vw !important;
-	height: 100vh !important;
-	max-width: none !important;
-	max-height: none !important;
-	overflow: hidden !important;
-}
-
-/* Hide scanning region overlays */
-#reader__scan_region,
-#reader__dashboard_section {
-	display: none !important;
+.video-element {
+	width: 100vw;
+	height: 100vh;
+	object-fit: cover;
+	background: black;
 }
 
 /* Text overlay styles */
@@ -292,20 +208,19 @@ onMount(async () => {
 	pointer-events: none;
 	display: flex;
 	flex-direction: column;
-	justify-content: center;
+	justify-content: top;
 	align-items: center;
+	margin-top:4vh;
 }
 
 .client-name {
 	font-family: 'DM Sans', sans-serif;
-	font-size: clamp(1.5rem, 5vw, 2.5rem);
+	font-size: 1rem;
 	font-weight: 500;
-	letter-spacing: 0.2em;
 	color: white;
 	text-align: center;
 	text-transform: uppercase;
 	margin-bottom: 0.5rem;
-	text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
 }
 
 .event-title {
@@ -354,6 +269,7 @@ onMount(async () => {
 	margin-bottom: 2rem;
 	font-size: clamp(0.875rem, 3vw, 1.125rem);
 	max-width: 400px;
+	line-height: 1.5;
 }
 
 .retry-button {
@@ -368,33 +284,56 @@ onMount(async () => {
 	cursor: pointer;
 	transition: all 0.2s ease;
 	pointer-events: auto;
+	border-radius: 4px;
 }
 
 .retry-button:hover {
 	background: #f3f4f6;
 	transform: translateY(-1px);
 }
+
+.loading-spinner {
+	width: 3rem;
+	height: 3rem;
+	border: 3px solid rgba(255, 255, 255, 0.3);
+	border-top: 3px solid white;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
+}
 </style>
 
 {#if loading}
 	<div class="loading-screen">
 		<div class="text-center">
-			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-			<p class="text-white text-sm sm:text-base font-medium">Looking up guest...</p>
+			<div class="loading-spinner"></div>
+			<p class="text-white text-sm sm:text-base font-medium mt-4">Looking up guest...</p>
 		</div>
 	</div>
 {:else}
-	<!-- Fullscreen camera view -->
-	<div id="reader"></div>
+	<!-- Camera view -->
+	<div class="scanner-container">
+		<video 
+			bind:this={videoElement}
+			class="video-element"
+			autoplay
+			muted
+			playsinline
+		></video>
+	</div>
 	
 	<!-- Text overlay -->
 	{#if clientData && !errorMessage}
 		<div class="overlay">
-			<h1 class="client-name">
+			<!-- <h1 class="client-name">
 				{clientData.client_name}
-			</h1>
+			</h1> -->
 			<p class="event-title">
-				{clientData.event_title || 'Wedding Ceremony'}
+				{clientData.event_title || 'Wedding Ceremony'} <br> QR CHeck-In
 			</p>
 		</div>
 	{/if}
@@ -407,10 +346,7 @@ onMount(async () => {
 			</div>
 			<button
 				class="retry-button"
-				on:click={() => {
-					errorMessage = '';
-					setTimeout(() => startScanner(), 500);
-				}}
+				on:click={retryScanner}
 			>
 				Try Again
 			</button>
