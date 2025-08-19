@@ -206,21 +206,12 @@ onDestroy(() => {
 	pointer-events: none;
 	display: flex;
 	flex-direction: column;
-	justify-content: center;
+	justify-content: top;
 	align-items: center;
+	margin-top:4vh;
 }
 
-.client-name {
-	font-family: 'DM Sans', sans-serif;
-	font-size: clamp(1.5rem, 5vw, 2.5rem);
-	font-weight: 500;
-	letter-spacing: 0.2em;
-	color: white;
-	text-align: center;
-	text-transform: uppercase;
-	margin-bottom: 0.5rem;
-	text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
-}
+
 
 .event-title {
 	font-family: 'DM Sans', sans-serif;
@@ -328,11 +319,9 @@ onDestroy(() => {
 	<!-- Text overlay -->
 	{#if clientData && !errorMessage}
 		<div class="overlay">
-			<h1 class="client-name">
-				{clientData.client_name}
-			</h1>
 			<p class="event-title">
 				{clientData.event_title || 'Wedding Ceremony'}
+				QR CODE CHECK-IN
 			</p>
 		</div>
 	{/if}
