@@ -49,21 +49,21 @@
     { family: 'SangBleu Regular', urls: ['/fonts/SangBleu-Regular.woff2', '/fonts/SangBleu-Regular.woff'] },
     { family: 'Snell Roundhand', urls: ['/fonts/SnellRoundhand.woff2', '/fonts/SnellRoundhand.woff'] },
     { family: 'DM Sans', urls: ['https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'] },
-    { family: 'Millionaire_Roman', urls: ['/fonts/Millionaire-Roman.woff2', '/fonts/Millionaire-Roman.woff'] },
-    { family: 'Millionaire_Script', urls: ['/fonts/Millionaire-Script.woff2', '/fonts/Millionaire-Script.woff'] },
-    { family: 'SangBleu Light', urls: ['/fonts/SangBleu-Light.woff2', '/fonts/SangBleu-Light.woff'] }
+    // { family: 'Millionaire_Roman', urls: ['/fonts/Millionaire-Roman.woff2', '/fonts/Millionaire-Roman.woff'] },
+    // { family: 'Millionaire_Script', urls: ['/fonts/Millionaire-Script.woff2', '/fonts/Millionaire-Script.woff'] },
+    // { family: 'SangBleu Light', urls: ['/fonts/SangBleu-Light.woff2', '/fonts/SangBleu-Light.woff'] }
   ];
 
   // ─── Static Images to Preload ─────────────────────────────────────────────
   const STATIC_IMAGES = [
     '/cross.png',
-    '/groom.png',
-    '/bride.png',
-    '/snow.gif',
-    '/deco1.png',
-    '/deco2.png',
-    '/deco3.png',
-    '/deco4.png'
+    // '/groom.png',
+    // '/bride.png',
+    // '/snow.gif',
+    // '/deco1.png',
+    // '/deco2.png',
+    // '/deco3.png',
+    // '/deco4.png'
   ];
 
   // ─── Preloading Functions ─────────────────────────────────────────────────
@@ -980,7 +980,7 @@
           <!--Start of Landing Page-->
           <div class="relative w-full min-h-[100dvh]">
             <!-- Background image -->
-            <video
+            <!-- <video
               class="fixed top-0 left-0 w-full h-full object-cover z-[-1]"
               style="height: 100%; min-height: 100%; background-color: #000; object-position: 65%;"
               autoplay
@@ -992,7 +992,7 @@
                 <source src={videoUrl} type="video/webm" />
               {/if}
               Your browser does not support the video tag.
-            </video>
+            </video> -->
 
             <!-- Dark overlay -->
             <div class="fixed top-0 left-0 w-full h-full bg-black/40 z-[-1]"></div>
