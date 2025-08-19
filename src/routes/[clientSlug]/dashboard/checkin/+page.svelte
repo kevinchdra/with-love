@@ -36,9 +36,7 @@ async function onScanSuccess(result) {
 				*,
 				invites (
 					client_name,
-					event_title,
-					event_date,
-					location
+					event_title
 				)
 			`)
 			.eq('guest_id', guestId)
@@ -208,19 +206,20 @@ onDestroy(() => {
 	pointer-events: none;
 	display: flex;
 	flex-direction: column;
-	justify-content: top;
+	justify-content: center;
 	align-items: center;
-	margin-top:4vh;
 }
 
 .client-name {
 	font-family: 'DM Sans', sans-serif;
-	font-size: 1rem;
+	font-size: clamp(1.5rem, 5vw, 2.5rem);
 	font-weight: 500;
+	letter-spacing: 0.2em;
 	color: white;
 	text-align: center;
 	text-transform: uppercase;
 	margin-bottom: 0.5rem;
+	text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
 }
 
 .event-title {
@@ -329,11 +328,11 @@ onDestroy(() => {
 	<!-- Text overlay -->
 	{#if clientData && !errorMessage}
 		<div class="overlay">
-			<!-- <h1 class="client-name">
+			<h1 class="client-name">
 				{clientData.client_name}
-			</h1> -->
+			</h1>
 			<p class="event-title">
-				{clientData.event_title || 'Wedding Ceremony'} <br> QR CHeck-In
+				{clientData.event_title || 'Wedding Ceremony'}
 			</p>
 		</div>
 	{/if}
