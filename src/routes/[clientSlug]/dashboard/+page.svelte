@@ -60,6 +60,10 @@ let isDeleting = false;
 // MODAL STATE
 // ============================================================================
 
+//Guest Modals
+let showAddGuestModal = false;
+
+
 
 // Gift Modals
 let showAddGiftModal = false;
@@ -3145,6 +3149,59 @@ onMount(async () => {
                         <button on:click={() => goToGuestPage(guestPage + 1)} disabled={guestPage === totalGuestPages}>Next</button>
                     </div>
                 </section>
+
+                <!-- Add Guest Modal -->
+    {#if showAddGuestModal}
+        <div class="modal-overlay" on:click={() => showAddGuestModal = false}>
+            <div class="modal-content" on:click|stopPropagation>
+                <div class="modal-header">
+                    <h3 class="modal-title">Add New Guest</h3>
+                    <button class="modal-close" on:click={() => showAddGuestModal = false}>
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <form on:submit|preventDefault={addGuest}>
+                    <div class="form-group">
+                        <label class="form-label">Full Name *</label>
+                        <input type="text" class="form-input" bind:value={newGuest.full_name} required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Phone Number *</label>
+                        <input type="tel" class="form-input" bind:value={newGuest.phone} required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-input" bind:value={newGuest.email}>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Number of Guests</label>
+                        <input type="number" class="form-input" bind:value={newGuest.guest_count} min="1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Dietary Restrictions</label>
+                        <input type="text" class="form-input" bind:value={newGuest.dietary_restriction}>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" on:click={() => showAddGuestModal = false}>
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            Add Guest
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    {/if}
+
 
 <!-- Gift Management Section for Dashboard -->
 <section class="table-container">

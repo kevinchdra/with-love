@@ -197,76 +197,82 @@
   $: formattedGiftNote = parseFormatting(couple.wedding_gift_note);
 
   /**
-   * Creates a Google Calendar URL for a single event with timezone handling
-   */
-  function createCalendarUrl(event) {
-    try {
-      if (!event?.event_date || !event?.start_time) {
-        console.error('Event missing required date/time:', event);
-        return null;
-      }
-
-      const eventTitle = invite.event_title;
-      const location = event.location || '';
-      const timezone = event.timezone || 'Asia/Makassar'; // Fallback to Bali time
-      
-      // Format date and time directly without Date object interpretation
-      // This prevents browser timezone interference
-      const formatDateTimeForCalendar = (date, time) => {
-        // Remove dashes from date (YYYY-MM-DD -> YYYYMMDD)
-        const dateFormatted = date.replace(/-/g, '');
-        // Remove colons from time and add seconds (HH:MM -> HHMMSS)
-        const timeFormatted = time.replace(/:/g, '') + '00';
-        return `${dateFormatted}T${timeFormatted}`;
-      };
-
-      const startDateTime = formatDateTimeForCalendar(event.event_date, event.start_time);
-      
-      // Handle end time
-      let endDateTime;
-      if (event.end_time) {
-        endDateTime = formatDateTimeForCalendar(event.event_date, event.end_time);
-      } else {
-        // Default to 2 hours later if no end time specified
-        const [hours, minutes] = event.start_time.split(':');
-        const endHour = (parseInt(hours) + 2).toString().padStart(2, '0');
-        const endTimeString = `${endHour}:${minutes}`;
-        endDateTime = formatDateTimeForCalendar(event.event_date, endTimeString);
-      }
-
-      // Build description (empty for clean calendar entries)
-      let description = '';
-
-      // Build the Google Calendar URL with timezone parameter
-      const baseUrl = 'https://www.google.com/calendar/render?action=TEMPLATE';
-      const params = new URLSearchParams({
-        text: eventTitle,
-        dates: `${startDateTime}/${endDateTime}`,
-        location: location,
-        details: description,
-        ctz: timezone, // This tells Google Calendar what timezone to use
-        sf: 'true',
-        output: 'xml'
-      });
-
-      const calendarUrl = `${baseUrl}&${params.toString()}`;
-      console.log('Calendar URL generated:', calendarUrl); // Debug log
-      console.log('Event data:', { 
-        date: event.event_date, 
-        startTime: event.start_time, 
-        endTime: event.end_time,
-        timezone: timezone,
-        formattedStart: startDateTime,
-        formattedEnd: endDateTime
-      }); // Debug log
-      
-      return calendarUrl;
-
-    } catch (error) {
-      console.error('Error creating calendar URL for event:', event, error);
+ * Creates a Google Calendar URL for a single event with proper timezone handling
+ */
+function createCalendarUrl(event) {
+  try {
+    if (!event?.event_date || !event?.start_time) {
+      console.error('Event missing required date/time:', event);
       return null;
     }
+
+    const eventTitle = invite.event_title;
+    const location = event.location || '';
+    const timezone = event.timezone || 'Asia/Makassar';
+    
+    // Create proper Date objects in the specified timezone
+    const createDateInTimezone = (dateStr, timeStr, tz) => {
+      // Parse the date and time
+      const [year, month, day] = dateStr.split('-');
+      const [hour, minute] = timeStr.split(':');
+      
+      // Create date string in ISO format for the specified timezone
+      const timezoneOffset = getTimezoneOffset(tz);
+      const isoString = `${year}-${month}-${day}T${hour}:${minute}:00${timezoneOffset}`;
+      
+      return new Date(isoString);
+    };
+
+    const startDate = createDateInTimezone(event.event_date, event.start_time, timezone);
+    
+    // Handle end time
+    let endDate;
+    if (event.end_time) {
+      endDate = createDateInTimezone(event.event_date, event.end_time, timezone);
+    } else {
+      // Default to 2 hours later if no end time specified
+      endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000));
+    }
+
+    // Convert to UTC and format for Google Calendar (YYYYMMDDTHHMMSSZ)
+    const formatDateForCalendar = (date) => {
+      return date.toISOString().replace(/-|:|\.\d{3}/g, '').replace('T', 'T').slice(0, -1) + 'Z';
+    };
+
+    const startDateTime = formatDateForCalendar(startDate);
+    const endDateTime = formatDateForCalendar(endDate);
+
+    // Build the Google Calendar URL without timezone parameter since we're using UTC
+    const baseUrl = 'https://www.google.com/calendar/render?action=TEMPLATE';
+    const params = new URLSearchParams({
+      text: eventTitle,
+      dates: `${startDateTime}/${endDateTime}`,
+      location: location,
+      details: '',
+      sf: 'true',
+      output: 'xml'
+    });
+
+    const calendarUrl = `${baseUrl}&${params.toString()}`;
+    console.log('Calendar URL generated:', calendarUrl);
+    console.log('Event data:', { 
+      date: event.event_date, 
+      startTime: event.start_time, 
+      endTime: event.end_time,
+      timezone: timezone,
+      startUTC: startDateTime,
+      endUTC: endDateTime,
+      startLocal: startDate.toISOString(),
+      endLocal: endDate.toISOString()
+    });
+    
+    return calendarUrl;
+
+  } catch (error) {
+    console.error('Error creating calendar URL for event:', event, error);
+    return null;
   }
+}
 
   /**
    * Get timezone offset string for common timezones
@@ -1304,14 +1310,14 @@
                 </div>
               </div>
             </div>
-            <a 
+            <!-- <a 
               href="https://www.instagram.com/reel/DMAlgiSTamH/?igsh=MWwya2NxMnB6bTB4dw=="
               target="_blank"
               rel="noopener noreferrer"
               class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
             >
               View Inspiration
-            </a>
+            </a> -->
           </div>
           {/if}
           <!-- End of Dress Code -->
@@ -1791,14 +1797,14 @@
             </div>
           </div>
         </div>
-        <a 
+        <!-- <a 
           href="https://www.instagram.com/reel/DMAlgiSTamH/?igsh=MWwya2NxMnB6bTB4dw=="
           target="_blank"
           rel="noopener noreferrer"
           class="border font-button uppercase border-white px-8 py-4 rounded text-white hover:bg-white hover:text-black transition"
         >
           View Inspiration
-        </a>
+        </a> -->
       </div>
       {/if}
       <!-- End of Dress Code -->

@@ -341,29 +341,14 @@ function cleanPhoneNumber(phone) {
   // Remove all non-digit characters except +
   let cleaned = phone.replace(/[^\d+]/g, '');
   
-  // Handle different Indonesian phone number formats
-  if (cleaned.startsWith('0')) {
-    // Convert 08xx to +628xx
+  // Only handle the unambiguous Indonesian case: numbers starting with 0
+  if (cleaned.startsWith('0') && cleaned.length >= 10) {
+    // Convert 08xx to +628xx (0-prefix is uniquely Indonesian)
     cleaned = '+62' + cleaned.substring(1);
-  } else if (cleaned.startsWith('8') && cleaned.length >= 10) {
-    // Convert 8xx to +628xx
-    cleaned = '+62' + cleaned;
-  } else if (cleaned.startsWith('62') && !cleaned.startsWith('+62')) {
-    // Convert 62xxx to +62xxx
+  }
+  // For everything else, just ensure it has a + if it looks like an international number
+  else if (!cleaned.startsWith('+') && cleaned.length >= 8) {
     cleaned = '+' + cleaned;
-  } else if (!cleaned.startsWith('+') && cleaned.length >= 10) {
-    // Assume it's Indonesian if no country code
-    cleaned = '+62' + cleaned;
-  }
-  
-  // Validate final format
-  if (cleaned.startsWith('+62') && cleaned.length >= 12 && cleaned.length <= 15) {
-    return cleaned;
-  }
-  
-  // If it doesn't match Indonesian format, return as-is but ensure it has +
-  if (!cleaned.startsWith('+') && cleaned.length >= 8) {
-    return '+' + cleaned;
   }
   
   return cleaned;
