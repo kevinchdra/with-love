@@ -10,20 +10,16 @@ let loading = false;
 let html5QrCode = null;
 let clientData = null;
 let clientSlug = '';
+let isScanning = false;
+let isTransitioning = false;
 
 async function onScanSuccess(decodedText) {
-	if (loading) return;
+	if (loading || isTransitioning) return;
 	console.log("QR Code detected:", decodedText);
 	loading = true;
 
 	// Stop the scanner immediately after successful scan
-	if (html5QrCode) {
-		try {
-			await html5QrCode.stop();
-		} catch (err) {
-			console.error('Error stopping scanner:', err);
-		}
-	}
+	await safeStopScanner();
 
 	try {
 		const guestId = decodedText.trim();
@@ -48,14 +44,21 @@ async function onScanSuccess(decodedText) {
 			console.error('Database error:', error);
 			errorMessage = `Guest not found: ${error.message}`;
 			loading = false;
-			startScanner();
+			// Wait before restarting to avoid state conflicts
+			setTimeout(() => {
+				errorMessage = '';
+				startScanner();
+			}, 2000);
 			return;
 		}
 
 		if (!guest) {
 			errorMessage = 'Invalid QR code - guest not found';
 			loading = false;
-			startScanner();
+			setTimeout(() => {
+				errorMessage = '';
+				startScanner();
+			}, 2000);
 			return;
 		}
 
@@ -63,7 +66,10 @@ async function onScanSuccess(decodedText) {
 		if (!guest.rsvp_status) {
 			errorMessage = `${guest.full_name} has not confirmed attendance`;
 			loading = false;
-			startScanner();
+			setTimeout(() => {
+				errorMessage = '';
+				startScanner();
+			}, 2000);
 			return;
 		}
 
@@ -73,7 +79,10 @@ async function onScanSuccess(decodedText) {
 		console.error('Error looking up guest:', err);
 		errorMessage = `Error: ${err.message}`;
 		loading = false;
-		startScanner();
+		setTimeout(() => {
+			errorMessage = '';
+			startScanner();
+		}, 2000);
 	}
 }
 
@@ -81,20 +90,50 @@ function onScanFailure(error) {
 	// Optional: console.warn(`QR scan failed: ${error}`);
 }
 
-async function startScanner() {
-	const qrRegionId = "reader";
-	if (!html5QrCode) {
-		html5QrCode = new Html5Qrcode(qrRegionId);
-	}
-
+async function safeStopScanner() {
+	if (!html5QrCode || isTransitioning) return;
+	
 	try {
+		isTransitioning = true;
 		const state = html5QrCode.getState();
-		if (state === 2) return; // Already scanning
+		
+		// State 2 = scanning, State 1 = not started
+		if (state === 2) {
+			await html5QrCode.stop();
+			isScanning = false;
+		}
 	} catch (err) {
-		// Scanner not running
+		console.error('Error stopping scanner:', err);
+	} finally {
+		isTransitioning = false;
 	}
+}
 
+async function startScanner() {
+	if (isScanning || isTransitioning) return;
+	
+	const qrRegionId = "reader";
+	
 	try {
+		isTransitioning = true;
+		
+		// Initialize scanner if not exists
+		if (!html5QrCode) {
+			html5QrCode = new Html5Qrcode(qrRegionId);
+		}
+
+		// Check current state and stop if needed
+		try {
+			const state = html5QrCode.getState();
+			if (state === 2) {
+				await html5QrCode.stop();
+				// Wait for stop to complete
+				await new Promise(resolve => setTimeout(resolve, 500));
+			}
+		} catch (err) {
+			// Scanner might not be initialized, continue
+		}
+
 		const cameras = await Html5Qrcode.getCameras();
 		if (cameras && cameras.length) {
 			await html5QrCode.start(
@@ -117,22 +156,29 @@ async function startScanner() {
 				onScanFailure
 			);
 
+			isScanning = true;
+			
 			// Force resize after initialization but preserve detection
 			setTimeout(() => {
 				forceVideoFullscreen();
-			}, 100);
+			}, 200);
 			
 		} else {
 			errorMessage = "No camera found";
 		}
 	} catch (err) {
-		errorMessage = "Camera access error: " + err;
+		errorMessage = "Camera access error: " + err.message;
 		console.error('Scanner start error:', err);
+		isScanning = false;
+	} finally {
+		isTransitioning = false;
 	}
 }
 
 // Function to gently force fullscreen without breaking detection
 function forceVideoFullscreen() {
+	if (!isScanning) return;
+	
 	const videos = document.querySelectorAll('#reader video');
 	const containers = document.querySelectorAll('#reader > div');
 	
@@ -156,23 +202,6 @@ function forceVideoFullscreen() {
 			container.style.setProperty('left', '0', 'important');
 		}
 	});
-}
-
-async function stopScanner() {
-	if (html5QrCode) {
-		try {
-			const state = html5QrCode.getState();
-			if (state === 2) {
-				await html5QrCode.stop();
-			}
-		} catch (err) {
-			try {
-				await html5QrCode.stop();
-			} catch (stopErr) {
-				console.error('Error stopping scanner:', stopErr);
-			}
-		}
-	}
 }
 
 onMount(async () => {
@@ -199,9 +228,13 @@ onMount(async () => {
 		return;
 	}
 
-	startScanner();
-	return () => {
-		stopScanner();
+	// Start scanner with delay to ensure DOM is ready
+	setTimeout(() => {
+		startScanner();
+	}, 100);
+	
+	return async () => {
+		await safeStopScanner();
 	};
 });
 </script>
@@ -341,8 +374,6 @@ onMount(async () => {
 	background: #f3f4f6;
 	transform: translateY(-1px);
 }
-
-/* Remove QR borders as requested */
 </style>
 
 {#if loading}
@@ -378,7 +409,7 @@ onMount(async () => {
 				class="retry-button"
 				on:click={() => {
 					errorMessage = '';
-					startScanner();
+					setTimeout(() => startScanner(), 500);
 				}}
 			>
 				Try Again

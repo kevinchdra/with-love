@@ -9,6 +9,7 @@
   export let guestSlug;
   export let guest = null;
   export let invite = null;
+  export let events = [];
 
   let guestId;
   let name = '';
@@ -221,8 +222,52 @@
   //     console.error('❌ Email send failed:', error);
   //   }
   // };
+function formatEventDate(dateString) {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });}
 
-  const sendEmail = async () => {
+// Add function to fetch event date with better debugging
+async function getEventDate() {
+  try {
+    console.log('🔍 Fetching events for invite.id:', invite.id);
+    
+    // events.invite_id should match invites.id
+    const { data: eventsData, error } = await supabase
+      .from('events')
+      .select('event_date, event_type')
+      .eq('invite_id', invite.id)  // Use invite.id, not invite.invite_id
+      .order('event_date', { ascending: true });
+    
+    console.log('🔍 Events query result:', eventsData);
+    
+    if (error) {
+      console.error('❌ Error fetching event date:', error);
+      return null;
+    }
+    
+    if (eventsData && eventsData.length > 0) {
+      console.log('🔍 Found events, using first event date:', eventsData[0].event_date);
+      return eventsData[0].event_date;
+    }
+    
+    console.log('🔍 No events found for invite.id:', invite.id);
+    return null;
+    
+  } catch (error) {
+    console.error('❌ Error fetching event date:', error);
+    return null;
+  }
+}
+
+// Updated sendEmail function
+const sendEmail = async () => {
   try {
     const { data: guestData, error } = await supabase
       .from('guests')
@@ -235,6 +280,12 @@
       return;
     }
 
+    // Fetch the event date
+    const eventDateString = await getEventDate();
+    const eventDate = eventDateString ? 
+      formatEventDate(eventDateString) : 
+      'Event Date TBD';
+
     const templateParams = {
       // Template parameters that match your EmailJS template
       to_email: email,        // This goes to "To email: {{to_email}}"
@@ -243,7 +294,7 @@
       
       // Content parameters for your HTML template
       guest_name: name,
-      event_date: "Sunday, 18th August",
+      event_date: eventDate,  // Dynamic event date fetched from database
       qr_code_url: guestData.qr_code_url,
     };
 
