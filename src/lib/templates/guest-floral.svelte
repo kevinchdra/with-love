@@ -5,7 +5,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import PersonalRsvp from '$lib/components/personalrsvp.svelte';
-  
+  import LottieClientOnly from '$lib/components/LottieClientOnly.svelte';
+  import arrowDown from '$lib/lottie/arrowDown.json';
   import Wishes from '$lib/components/wishes.svelte';
   import { tick } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
@@ -118,60 +119,107 @@
   }
 
   // ─── Main Preloading Function ─────────────────────────────────────────────
+  // async function preloadAllAssets() {
+  //   const totalSteps = 4; // fonts, static images, dynamic images, video
+  //   let currentStep = 0;
+
+  //   try {
+  //     // Step 1: Preload Fonts
+  //     loadingStatus = 'Celebrating Love';
+  //     loadingProgress = (currentStep / totalSteps) * 100;
+      
+  //     await Promise.allSettled(
+  //       FONTS_TO_PRELOAD.map(font => preloadFont(font))
+  //     );
+      
+  //     currentStep++;
+  //     loadingProgress = (currentStep / totalSteps) * 100;
+
+  //     // Step 2: Preload Static Images
+  //     loadingStatus = 'Celebrating Family';
+      
+  //     await Promise.allSettled(
+  //       STATIC_IMAGES.map(src => preloadImage(src))
+  //     );
+      
+  //     currentStep++;
+  //     loadingProgress = (currentStep / totalSteps) * 100;
+
+  //     // Step 3: Load and Preload Dynamic Images from Supabase
+  //     loadingStatus = 'Celebrating Forever';
+      
+  //     await loadSupabaseImages();
+      
+  //     currentStep++;
+  //     loadingProgress = (currentStep / totalSteps) * 100;
+
+  //     // Step 4: Preload Video
+  //     loadingStatus = 'Celebrating Together';
+      
+  //     await loadSupabaseVideo();
+      
+  //     currentStep++;
+  //     loadingProgress = 100;
+
+  //     // Small delay to show completion
+  //     await new Promise(resolve => setTimeout(resolve, 500));
+      
+  //     loadingStatus = 'Complete!';
+  //     isLoading = false;
+
+  //   } catch (error) {
+  //     console.error('Error during preloading:', error);
+  //     // Still proceed even if some assets fail
+  //     isLoading = false;
+  //   }
+  // }
+
   async function preloadAllAssets() {
-    const totalSteps = 4; // fonts, static images, dynamic images, video
-    let currentStep = 0;
+  const totalSteps = 2; // Only fonts and video now
+  let currentStep = 0;
 
-    try {
-      // Step 1: Preload Fonts
-      loadingStatus = 'Celebrating Love';
-      loadingProgress = (currentStep / totalSteps) * 100;
-      
-      await Promise.allSettled(
-        FONTS_TO_PRELOAD.map(font => preloadFont(font))
-      );
-      
-      currentStep++;
-      loadingProgress = (currentStep / totalSteps) * 100;
+  try {
+    // Step 1: Preload Fonts
+    loadingStatus = 'Celebrating Love';
+    loadingProgress = (currentStep / totalSteps) * 100;
+    
+    await Promise.allSettled(
+      FONTS_TO_PRELOAD.map(font => preloadFont(font))
+    );
+    
+    currentStep++;
+    loadingProgress = (currentStep / totalSteps) * 100;
 
-      // Step 2: Preload Static Images
-      loadingStatus = 'Celebrating Family';
-      
-      await Promise.allSettled(
-        STATIC_IMAGES.map(src => preloadImage(src))
-      );
-      
-      currentStep++;
-      loadingProgress = (currentStep / totalSteps) * 100;
+    // Step 2: Preload Video
+    loadingStatus = 'Celebrating Together';
+    
+    await loadSupabaseVideo();
+    
+    currentStep++;
+    loadingProgress = 100;
 
-      // Step 3: Load and Preload Dynamic Images from Supabase
-      loadingStatus = 'Celebrating Forever';
-      
-      await loadSupabaseImages();
-      
-      currentStep++;
-      loadingProgress = (currentStep / totalSteps) * 100;
+    // Small delay to show completion
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    loadingStatus = 'Complete!';
+    isLoading = false;
 
-      // Step 4: Preload Video
-      loadingStatus = 'Celebrating Together';
-      
-      await loadSupabaseVideo();
-      
-      currentStep++;
-      loadingProgress = 100;
+    // Load images in background AFTER loading screen is done (non-blocking)
+    setTimeout(() => {
+      loadSupabaseImages(); // No await - runs in background
+    }, 100);
 
-      // Small delay to show completion
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      loadingStatus = 'Complete!';
-      isLoading = false;
-
-    } catch (error) {
-      console.error('Error during preloading:', error);
-      // Still proceed even if some assets fail
-      isLoading = false;
-    }
+  } catch (error) {
+    console.error('Error during preloading:', error);
+    // Still proceed even if some assets fail
+    isLoading = false;
+    
+    // Still try to load images in background even if other preloading failed
+    setTimeout(() => {
+      loadSupabaseImages();
+    }, 100);
   }
+}
 
   // ─── Improved Google Calendar Integration ─────────────────────────────────
   
@@ -316,88 +364,142 @@ function createCalendarUrl(event) {
   $: primaryCalendarUrl = eventCalendarUrls.length > 0 ? eventCalendarUrls[0].calendarUrl : null;
 
   let videoUrl = '';
+  let posterUrl = '';
 
   // ─── Supabase Asset Loading ───────────────────────────────────────────────
   async function loadSupabaseVideo() {
-    try {
-      const { data: publicData, error } = supabase
-        .storage
-        .from('invites-images')
-        .getPublicUrl(`${clientSlug}/video.webm`);
+  try {
+    // Get video URL
+    const { data: videoData, error: videoError } = supabase
+      .storage
+      .from('invites-images')
+      .getPublicUrl(`${clientSlug}/video.webm`);
 
-      if (error) {
-        console.error('Error getting video public URL:', error);
-        return;
-      }
-
-      videoUrl = publicData.publicUrl;
+    if (videoError) {
+      console.error('Error getting video public URL:', videoError);
+    } else {
+      videoUrl = videoData.publicUrl;
       console.log('Video URL:', videoUrl);
-      
-      // Preload the video
-      if (videoUrl) {
-        await preloadVideo(videoUrl);
-      }
-    } catch (error) {
-      console.error('Error loading video:', error);
     }
-  }
 
+    // Get poster URL  
+    const { data: posterData, error: posterError } = supabase
+      .storage
+      .from('invites-images')
+      .getPublicUrl(`${clientSlug}/video-poster.webp`);
+
+    if (posterError) {
+      console.warn('No poster image found:', posterError);
+      // Poster is optional, so don't throw error
+    } else {
+      posterUrl = posterData.publicUrl;
+      console.log('Poster URL:', posterUrl);
+    }
+    
+    // Preload video (and poster if it exists)
+    const promises = [];
+    
+    if (videoUrl) {
+      promises.push(preloadVideo(videoUrl));
+    }
+    
+    if (posterUrl) {
+      promises.push(preloadImage(posterUrl)); // Preload poster as image
+    }
+    
+    await Promise.allSettled(promises);
+    
+  } catch (error) {
+    console.error('Error loading video assets:', error);
+  }
+}
   //Carousel for countdown
   let images = [];
   let currentIndex = 0;
 
-  async function loadSupabaseImages() {
-    try {
-      // List files in the specific client folder, not root
-      const { data, error } = await supabase
+async function loadSupabaseImages() {
+  try {
+    console.log('🖼️ Loading images in background...');
+    
+    const { data, error } = await supabase
+      .storage
+      .from('invites-images')
+      .list(clientSlug, { limit: 100 });
+      
+    if (error) {
+      console.error('Error listing images:', error);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      console.warn(`No files found in folder: ${clientSlug}`);
+      return;
+    }
+   
+    // Only include numbered image files (1.jpg, 2.png, etc.) - exclude video-poster
+    const sorted = data
+      .filter(file => {
+        // Must be an image file
+        const isImage = /\.(jpe?g|png|webp)$/i.test(file.name);
+        // Must start with a number (for carousel images)
+        const startsWithNumber = /^\d+\./i.test(file.name);
+        
+        return isImage && startsWithNumber;
+      })
+      .sort((a, b) => parseInt(a.name) - parseInt(b.name));
+
+    console.log('Filtered carousel images:', sorted.map(f => f.name));
+
+    const imageUrls = sorted.map(file => {
+      const { data: publicData } = supabase
         .storage
         .from('invites-images')
-        .list(clientSlug, { limit: 100 }); // Use clientSlug as the folder path
-        
-      console.log(`Files in ${clientSlug} folder:`, data, error);
-      console.log("Client slug:", clientSlug);
-      
-      if (error) {
-        console.error('Error listing images:', error);
-        return;
-      }
+        .getPublicUrl(`${clientSlug}/${file.name}`);
+      return publicData.publicUrl;
+    });
 
-      console.log("Files found in folder:", data);
+    console.log(`Found ${imageUrls.length} carousel images to load`);
 
-      if (!data || data.length === 0) {
-        console.warn(`No files found in folder: ${clientSlug}`);
-        return;
-      }
-     
-      const sorted = data
-        .filter(file => /\.(jpe?g|png|webp)$/i.test(file.name))
-        .sort((a, b) => parseInt(a.name) - parseInt(b.name));
+    if (imageUrls.length === 0) return;
 
-      const imageUrls = sorted.map(file => {
-        const { data: publicData } = supabase
-          .storage
-          .from('invites-images')
-          .getPublicUrl(`${clientSlug}/${file.name}`);
-        return publicData.publicUrl;
-      });
-
-      console.log("Image URLs:", imageUrls);
-
-      // Preload all images
-      const preloadedImages = await Promise.allSettled(
-        imageUrls.map(url => preloadImage(url))
-      );
-
-      // Only keep successfully loaded images
-      images = preloadedImages
-        .filter(result => result.status === 'fulfilled')
-        .map(result => result.value);
-
-      if (images.length > 0) startCarousel();
+    // Initialize empty array
+    let loadedImages = [];
+    
+    // Load first image quickly to start carousel
+    try {
+      const firstImage = await preloadImage(imageUrls[0]);
+      loadedImages = [firstImage];
+      images = loadedImages; // Trigger Svelte reactivity
+      console.log('✅ First carousel image loaded, starting carousel');
+      startCarousel();
     } catch (error) {
-      console.error('Error loading Supabase images:', error);
+      console.warn('Failed to load first carousel image:', error);
     }
+
+    // Load remaining images in background
+    if (imageUrls.length > 1) {
+      for (let i = 1; i < imageUrls.length; i++) {
+        try {
+          const loadedImage = await preloadImage(imageUrls[i]);
+          loadedImages = [...loadedImages, loadedImage]; // Create new array
+          images = loadedImages; // Trigger Svelte reactivity
+          console.log(`✅ Loaded carousel image ${i + 1}/${imageUrls.length}`);
+          
+          // Small delay to prevent overwhelming the browser
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+          console.warn(`Failed to load carousel image ${i + 1}:`, error);
+        }
+      }
+    }
+
+    console.log(`🎉 Finished loading ${images.length} total carousel images`);
+    
+  } catch (error) {
+    console.error('Error loading Supabase images:', error);
   }
+}
+
 
   function startCarousel() {
     setInterval(() => {
@@ -681,6 +783,7 @@ function createCalendarUrl(event) {
 </script>
 
 <svelte:head>
+  <link rel="preload" as="image" href="/video-poster.webp" fetchpriority="high">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Preload critical fonts -->
   {#each FONTS_TO_PRELOAD as font}
@@ -910,6 +1013,33 @@ function createCalendarUrl(event) {
       letter-spacing: 0.25em;
     }
   }
+
+  .video-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: -1;
+    background-color: #000;
+    object-position: 65%;
+  }
+
+  /* Mobile: Full screen video */
+  @media (max-width: 1023px) {
+    .video-background {
+      /* Default styles work for mobile */
+    }
+  }
+
+  /* Desktop: Video only on right side (40% width) */
+  @media (min-width: 1024px) {
+    .video-background {
+      left: 60%; /* Start at 60% from left (right side) */
+      width: 40%; /* Only take up 40% width */
+    }
+  }
 </style>
 
 <audio
@@ -940,9 +1070,25 @@ function createCalendarUrl(event) {
     </div>
   </div>
 {:else}
+
   <!-- Main Content - Only show after loading is complete -->
   <div in:fade={{ duration: 800 }}>
     <slot />
+
+    <video
+          class="video-background"
+          poster={posterUrl}
+          style="height: 100%; min-height: 100%; background-color: #000; object-position: 65%;"
+          autoplay
+          muted
+          loop
+          playsinline
+        >
+          {#if videoUrl}
+            <source src={videoUrl} type="video/webm" />
+          {/if}
+          Your browser does not support the video tag.
+        </video>
 
     <!-- Desktop Layout Wrapper -->
     <div class="hidden lg:flex h-screen overflow-hidden">
@@ -1041,8 +1187,13 @@ function createCalendarUrl(event) {
             <img src="/cross.png" alt="cross" class="w-4 h-5 sm:w-3 sm:h-4 object-fill opacity-80 fade-in">
             <h1 class="font-h2 text-white fade-in">I have found the one whom my soul loves.</h1>
             <p class="font-smallcaption font-bold text-white uppercase tracking-[1em] sm:tracking-[1.5em] md:tracking-[2em] opacity-90 text-xs sm:text-sm fade-in">SONG OF SOLOMON 3:4</p>
-            <div class="absolute bottom-40 left-1/2 -translate-x-1/2 w-20 h-20 flex justify-center items-center fade-in">
-            </div>
+            <!-- <div class="absolute left-1/2 -translate-x-1/2  flex justify-center items-center"> -->
+              <div class="scale-50 opacity-80">
+                <LottieClientOnly {arrowDown} />
+              </div>
+            <!-- </div> -->
+            
+              
           </div>
           {/if}
           <!--End of Devotions-->
@@ -1473,8 +1624,9 @@ function createCalendarUrl(event) {
       <!--Start of Landing Page-->
       <div class="relative w-full min-h-[100dvh]">
         <!-- Background image -->
-        <video
+        <!-- <video
           class="fixed top-0 left-0 w-full h-full object-cover z-[-1]"
+          poster={posterUrl}
           style="height: 100%; min-height: 100%; background-color: #000; object-position: 65%;"
           autoplay
           muted
@@ -1485,7 +1637,7 @@ function createCalendarUrl(event) {
             <source src={videoUrl} type="video/webm" />
           {/if}
           Your browser does not support the video tag.
-        </video>
+        </video> -->
 
         <!-- Dark overlay -->
         <div class="fixed top-0 left-0 w-full h-full bg-black/50 z-[-1]"></div>
