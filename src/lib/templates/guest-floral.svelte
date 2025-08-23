@@ -777,12 +777,21 @@ async function loadSupabaseImages() {
   // ─── Calendar Click Handler (for tracking/analytics) ─────────────────────
   function handleCalendarClick(event, url) {
     console.log('Calendar clicked for event:', event.event_type, 'URL:', url);
+    
     // Add any analytics tracking here if needed
     window.open(url, '_blank', 'noopener,noreferrer');
   }
+
+  $: inviteImageUrl = `https://your-supabase-url.supabase.co/storage/v1/object/public/invites-images/${data.clientData?.slug || 'default'}/preview.webp`;
+  $: currentUrl = `https://startswithlove.com${$page.url.pathname}`;
 </script>
 
 <svelte:head>
+  <meta property="og:image" content="{inviteImageUrl}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="{currentUrl}" />
+    <meta property="og:type" content="website" />
   <link rel="preload" as="image" href="/video-poster.webp" fetchpriority="high">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Preload critical fonts -->

@@ -219,36 +219,184 @@ $: paginatedGift = filteredGifts.slice(
 /**
  * Load all dashboard data from Supabase
  */
+// async function loadDashboardData() {
+//     try {
+//         loading = true;
+//         console.log('loadDashboardData started');
+//         console.log('clientSlug:', clientSlug);
+//         // Fetch client data
+//         const { data: invite, error: inviteError } = await supabase
+//             .from('invites')
+//             // .select('*')
+//             .select(`
+//     *,
+//     events!invites_event_id_fkey (
+//         event_date,
+//         location
+//     )
+// `)
+//             .eq('slug', clientSlug)
+//             .single()
+            
+//         console.log('Invite response:', invite, inviteError);
+        
+//         if (inviteError || !invite) {
+//             errorMessage = 'Client not found';
+//             throw inviteError || new Error('Client not found');
+//         }
+//         clientData = invite;
+        
+//         // Load saved metrics preferences
+//         if (invite.dashboard_metrics) {
+//             if (Array.isArray(invite.dashboard_metrics)) {
+//                 // OLD format: array of keys → convert to object with default mode 'count'
+//                 selectedMetrics = invite.dashboard_metrics.reduce((acc, key) => {
+//                     acc[key] = { mode: 'count' };
+//                     return acc;
+//                 }, {});
+//             } else if (typeof invite.dashboard_metrics === 'object') {
+//                 // NEW format: already key/mode object
+//                 selectedMetrics = invite.dashboard_metrics;
+//             }
+//         }
+        
+//         // Fetch guests
+//         const { data: guestData, error: guestError } = await supabase
+//             .from('guests')
+//             .select('*')
+//             .eq('invite_id', invite.id)
+//             .order('full_name')
+//             .range(0, 49);
+            
+//         if (guestError) {
+//             errorMessage = 'Failed to load guest data';
+//             console.error(guestError);
+//             throw guestError;
+//         }
+//         guests = guestData || [];
+        
+//         // Fetch gifts with guest relationships
+//         const { data: giftData, error: giftError } = await supabase
+//             .from('gifts')
+//             .select(`
+//                 *,
+//                 guests!gifts_guest_id_fkey (
+//                     guest_id,
+//                     full_name,
+//                     phone
+//                 )
+//             `)
+//             .eq('invite_id', invite.id)
+//             .order('created_at', { ascending: false });
+
+//         if (giftError) {
+//             console.error('Error loading gifts:', giftError);
+//         } else {
+//             gifts = giftData || [];
+//         }
+        
+//     } catch (err) {
+//         console.error('Error loading dashboard data:', err);
+//         errorMessage = 'Failed to load dashboard data';
+//     } finally {
+//         loading = false;
+//     }
+// }
 async function loadDashboardData() {
     try {
         loading = true;
         console.log('loadDashboardData started');
         console.log('clientSlug:', clientSlug);
-        // Fetch client data
+        
+        // Get the invite first
         const { data: invite, error: inviteError } = await supabase
             .from('invites')
             .select('*')
             .eq('slug', clientSlug)
             .single()
             
-        console.log('Invite response:', invite, inviteError);
+        console.log('Invite query result:', { invite, inviteError });
         
         if (inviteError || !invite) {
             errorMessage = 'Client not found';
             throw inviteError || new Error('Client not found');
         }
-        clientData = invite;
+        
+        console.log('Invite ID for event lookup:', invite.id);
+        
+        // Get the related event data with detailed logging
+        const { data: event, error: eventError } = await supabase
+            .from('events')
+            .select('*') // Select all fields to see what's available
+            .eq('invite_id', invite.id);
+            
+        console.log('Event query result:', { 
+            event, 
+            eventError,
+            inviteId: invite.id,
+            eventCount: event?.length 
+        });
+        
+        // Try different approaches if the first one fails
+        if (!event || event.length === 0) {
+            console.log('No events found with invite_id, trying alternative queries...');
+            
+            // Try with different field names
+            const { data: eventAlt1, error: eventError1 } = await supabase
+                .from('events')
+                .select('*')
+                .eq('id', invite.id); // Maybe it's a direct ID match
+                
+            console.log('Alternative query 1 (id = invite.id):', { eventAlt1, eventError1 });
+            
+            // Try another common pattern
+            const { data: eventAlt2, error: eventError2 } = await supabase
+                .from('events')
+                .select('*')
+                .eq('event_id', invite.id);
+                
+            console.log('Alternative query 2 (event_id = invite.id):', { eventAlt2, eventError2 });
+            
+            // Show all events to see the structure
+            const { data: allEvents, error: allEventsError } = await supabase
+                .from('events')
+                .select('*')
+                .limit(5);
+                
+            console.log('Sample events (first 5):', { allEvents, allEventsError });
+        }
+        
+        // Use the first successful result
+        let finalEvent = null;
+        if (event && event.length > 0) {
+            finalEvent = event[0]; // Take first result if it's an array
+        }
+        
+        // Combine the data
+        clientData = {
+            ...invite,
+            events: finalEvent || {}
+        };
+        
+        console.log('Final clientData structure:', {
+            invite_id: clientData.id,
+            invite_slug: clientData.slug,
+            rsvp_deadline: clientData.rsvp_deadline,
+            client_name: clientData.client_name,
+            events_data: clientData.events,
+            events_keys: Object.keys(clientData.events || {}),
+            event_date: clientData.events?.event_date,
+            location: clientData.events?.location
+        });
         
         // Load saved metrics preferences
         if (invite.dashboard_metrics) {
             if (Array.isArray(invite.dashboard_metrics)) {
-                // OLD format: array of keys → convert to object with default mode 'count'
                 selectedMetrics = invite.dashboard_metrics.reduce((acc, key) => {
                     acc[key] = { mode: 'count' };
                     return acc;
                 }, {});
             } else if (typeof invite.dashboard_metrics === 'object') {
-                // NEW format: already key/mode object
                 selectedMetrics = invite.dashboard_metrics;
             }
         }
@@ -938,21 +1086,25 @@ function clearGuestSelection() {
  * Fill message template with actual values
  */
 function fillTemplate(template, guest, giftGroup = null) {
-    const eventDate = clientData?.event_date ? 
-        new Date(clientData.event_date).toLocaleDateString('en-US', {
+    // Access event data from events_data nested object
+    const eventDate = clientData?.events?.event_date ? 
+        new Date(clientData.events.event_date).toLocaleDateString('en-US', {
             weekday: 'long',
             year: 'numeric', 
             month: 'long',
             day: 'numeric'
         }) : 'TBD';
 
-    const rsvpDeadline = clientData?.event_date ? 
-        new Date(new Date(clientData.event_date).getTime() - (14 * 24 * 60 * 60 * 1000))
-            .toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long', 
-                day: 'numeric'
-            }) : 'TBD';
+    // Location is in events_data
+    const location = clientData?.events?.location || 'TBD';
+
+    // RSVP deadline from invites table
+    const rsvpDeadline = clientData?.rsvp_deadline ? 
+        new Date(clientData.rsvp_deadline).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long', 
+            day: 'numeric'
+        }) : 'TBD';
 
     const inviteUrl = `http://startswithlove.com/${clientSlug}/${guest.slug}`;
     
@@ -963,16 +1115,27 @@ function fillTemplate(template, guest, giftGroup = null) {
         ).join(', ');
     }
 
+    // Debug log to verify the values
+    console.log('Template replacement values:', {
+        guest_name: guest.full_name,
+        client_name: clientData?.client_name,
+        event_date: eventDate,
+        location: location,
+        rsvp_deadline: rsvpDeadline,
+        raw_event_date: clientData?.event_date,
+        raw_location: clientData?.location,
+        raw_rsvp_deadline: clientData?.rsvp_deadline
+    });
+
     return template
         .replace(/{guest_name}/g, guest.full_name)
         .replace(/{client_name}/g, clientData?.client_name || 'Our')
         .replace(/{event_date}/g, eventDate)
-        .replace(/{location}/g, clientData?.location)
+        .replace(/{location}/g, location)
         .replace(/{rsvp_deadline}/g, rsvpDeadline)
         .replace(/{invite_url}/g, inviteUrl)
         .replace(/{gift_description}/g, giftDescription);
 }
-
 /**
  * Send WhatsApp invite
  */
@@ -1176,9 +1339,9 @@ function resetToDefault() {
         if (settingsActiveTab === 'invite') {
             tempMessageTemplates.invite = `Hi {guest_name},
 
-You are invited to {client_name} Wedding on {event_date} at {location}.
+You are invited to {client_name} Wedding on *{event_date} at {location}*.
 
-Please open your invite and confirm your RSVP before {rsvp_deadline}:
+Please open your invite and confirm your RSVP before *{rsvp_deadline}*:
 {invite_url}
 
 We appreciate your attendance and look forward to celebrating our special moment with you!`;
