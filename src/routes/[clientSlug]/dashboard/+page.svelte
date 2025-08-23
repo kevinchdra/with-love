@@ -967,7 +967,7 @@ function fillTemplate(template, guest, giftGroup = null) {
         .replace(/{guest_name}/g, guest.full_name)
         .replace(/{client_name}/g, clientData?.client_name || 'Our')
         .replace(/{event_date}/g, eventDate)
-        .replace(/{location}/g, clientData?.location || 'Jakarta, Indonesia')
+        .replace(/{location}/g, clientData?.location)
         .replace(/{rsvp_deadline}/g, rsvpDeadline)
         .replace(/{invite_url}/g, inviteUrl)
         .replace(/{gift_description}/g, giftDescription);
@@ -1035,11 +1035,11 @@ async function sendPreviewedMessage() {
 
     // Format phone number for WhatsApp
     let phoneNumber = selectedGuestForPreview.phone.replace(/\D/g, '');
-    if (!phoneNumber.startsWith('62') && phoneNumber.startsWith('0')) {
-        phoneNumber = '62' + phoneNumber.substring(1);
-    } else if (!phoneNumber.startsWith('62')) {
-        phoneNumber = '62' + phoneNumber;
-    }
+    // if (!phoneNumber.startsWith('62') && phoneNumber.startsWith('0')) {
+    //     phoneNumber = '62' + phoneNumber.substring(1);
+    // } else if (!phoneNumber.startsWith('62')) {
+    //     phoneNumber = '62' + phoneNumber;
+    // }
 
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(previewMessage)}`;
     window.open(whatsappUrl, '_blank');

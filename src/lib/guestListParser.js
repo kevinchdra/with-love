@@ -342,12 +342,12 @@ function cleanPhoneNumber(phone) {
   let cleaned = phone.replace(/[^\d+]/g, '');
   
   // Only handle the unambiguous Indonesian case: numbers starting with 0
-  if (cleaned.startsWith('0') && cleaned.length >= 10) {
+  // if (cleaned.startsWith('0') && cleaned.length >= 10) {
     // Convert 08xx to +628xx (0-prefix is uniquely Indonesian)
-    cleaned = '+62' + cleaned.substring(1);
-  }
+  //   cleaned = '+62' + cleaned.substring(1);
+  // }
   // For everything else, just ensure it has a + if it looks like an international number
-  else if (!cleaned.startsWith('+') && cleaned.length >= 8) {
+ if (!cleaned.startsWith('+') && cleaned.length >= 8) {
     cleaned = '+' + cleaned;
   }
   

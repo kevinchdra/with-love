@@ -910,7 +910,7 @@ onMount(async () => {
                                     Download our template with the correct format: Name, Phone Number, Expected Guest Numbers
                                 </p>
                                 <div class="button-group">
-                                    
+                                    <button class="btn" on:click={downloadCSVTemplate}>📊 CSV Template</button>
                                     <button class="btn" on:click={downloadXLSXTemplate}>📊 Excel Template</button>
                                 </div>
                             </div>
