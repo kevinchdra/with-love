@@ -333,6 +333,7 @@ function createCalendarUrl(event) {
       'UTC': '+00:00',
       'America/New_York': '-05:00', // EST (winter) / -04:00 EDT (summer)
       'Europe/London': '+00:00',    // GMT (winter) / +01:00 BST (summer)
+      'Asia/Kuala_Lumpur': '+08:00',
     };
     
     return timezoneMap[timezone] || '+08:00'; // Default to WITA
@@ -349,6 +350,7 @@ function createCalendarUrl(event) {
       'UTC': 'UTC',
       'America/New_York': 'EST',
       'Europe/London': 'GMT',
+      'Asia/Kuala_Lumpur': 'MYT',
     };
     
     return abbreviationMap[timezone] || 'WITA'; // Default to WITA
@@ -1441,7 +1443,9 @@ async function loadSupabaseImages() {
           {#if invite.section_toggle.includes("wishes")}
           <div class="relative w-full min-h-[100dvh] wishes-section overflow-hidden">
             <div class="fade-in">
-              <Wishes />
+                <!-- {console.log('Invite object:', invite)}
+    {console.log('Invite ID:', invite.id)} -->
+              <Wishes inviteId={invite.id}/>
             </div>
           </div>
           {/if}
@@ -1929,7 +1933,7 @@ async function loadSupabaseImages() {
       {#if invite.section_toggle.includes("wishes")}
       <div class="relative w-full min-h-[100dvh] wishes-section overflow-hidden">
         <div class="fade-in">
-          <Wishes />
+          <Wishes inviteId={invite.id}/>
         </div>
       </div>
       {/if}

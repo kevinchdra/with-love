@@ -2,14 +2,54 @@
   import { supabase } from '$lib/supabaseClient'
   import { onMount } from 'svelte'
 
+  export let inviteId: string 
+
   let wishesWall: any[] = []
   let loading = true
   let error = ''
   let currentPage = 1
   const itemsPerPage = 3
-export let inviteId: string 
+  let hasLoaded = false
+
+    $: if (inviteId && !hasLoaded) { // 👈 Only run if inviteId exists and hasn't loaded yet
+    fetchWishes(inviteId)
+  }
+
+    async function fetchWishes(id: string) {
+    console.log('Fetching wishes for inviteId:', id)
+    loading = true
+    
+    const { data, error: err } = await supabase
+      .from('guests')
+      .select('full_name, wishes, submitted_at, invite_id')
+      .eq('invite_id', id)
+      .not('wishes', 'is', null)
+      .neq('wishes', '')
+      .order('submitted_at', { ascending: false })
+
+    console.log('Query result - data:', data)
+    console.log('Query result - error:', err)
+    
+    if (err) {
+      error = err.message
+    } else {
+      wishesWall = data || []
+      error = ''
+      hasLoaded = true // 👈 Mark as loaded
+    }
+    
+    loading = false
+  }
+
   
   onMount(async () => {
+      console.log('Wishes component - inviteId received:', inviteId, typeof inviteId)
+     if (!inviteId) {
+      error = 'Invite ID not provided'
+      loading = false
+      return
+    }
+
     const { data, error: err } = await supabase
       .from('guests')
       .select('full_name, wishes, submitted_at')
