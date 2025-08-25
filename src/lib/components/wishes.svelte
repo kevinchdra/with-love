@@ -7,12 +7,13 @@
   let error = ''
   let currentPage = 1
   const itemsPerPage = 3
-
+export let inviteId: string 
   
   onMount(async () => {
     const { data, error: err } = await supabase
       .from('guests')
       .select('full_name, wishes, submitted_at')
+      .eq('invite_id', inviteId)
       .not('wishes', 'is', null)
       .neq('wishes', '')
       .order('submitted_at', { ascending: false })

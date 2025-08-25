@@ -2,10 +2,11 @@
 // ============================================================================
 // IMPORTS & DEPENDENCIES
 // ============================================================================
-import { onMount } from 'svelte';
+import { onMount, onDestroy } from 'svelte';
 import { page } from '$app/stores';
 import { goto } from '$app/navigation';
 import { supabase } from '$lib/supabaseClient';
+import { browser } from '$app/environment';
 
 // ============================================================================
 // CORE STATE VARIABLES
@@ -29,13 +30,13 @@ let sidebarCollapsed = false;
 // SEARCH & FILTER STATE
 // ============================================================================
 
-// Guest Search & Filters
-let searchTerm = '';
+// Guest Search & Filters - Split for two tables
+let searchTermNotSent = '';
+let searchTermSent = '';
 let sortField = 'full_name';
 let sortDirection = 'asc';
 let filterRsvp = 'all';
 let filterCheckIn = 'all';
-let filterInviteSent = 'all';
 
 // Gift Search & Filters
 let giftSearchTerm = '';
@@ -50,11 +51,15 @@ let expandedAction = null;
 // ============================================================================
 // SELECTION STATE
 // ============================================================================
-let selectedGuests = new Set();
+let selectedGuestsNotSent = new Set();
+let selectedGuestsSent = new Set();
 let selectedGifts = new Set();
 let selectedGiftGroups = new Set();
 let showDeleteConfirmation = false;
+let showDeleteSentConfirmation = false;
+let showMarkNotSentConfirmation = false;
 let isDeleting = false;
+let isMarkingNotSent = false;
 
 // ============================================================================
 // MODAL STATE
@@ -62,8 +67,6 @@ let isDeleting = false;
 
 //Guest Modals
 let showAddGuestModal = false;
-
-
 
 // Gift Modals
 let showAddGiftModal = false;
@@ -88,6 +91,7 @@ let settingsActiveTab = 'invite';
 // PAGINATION STATE
 // ============================================================================
 let guestPage = 1;
+let guestPageSent = 1;
 const guestsPerPage = 10;
 let giftPage = 1;
 const giftPerPage = 10;
@@ -153,11 +157,8 @@ let tempMessageTemplates = { ...messageTemplates };
 // MESSAGE PREVIEW STATE
 // ============================================================================
 let previewMessage = '';
-
 let selectedGuestForPreview = null;
-
 let messageType = '';
-
 
 // ============================================================================
 // FORM STATE
@@ -195,15 +196,22 @@ let filteredGuestsForSearch = [];
 // Calculate metrics from data
 $: metrics = calculateMetrics(guests, gifts);
 
-// Process and filter data
-$: filteredGuests = processGuests(guests, searchTerm, sortField, sortDirection, filterRsvp, filterCheckIn, filterInviteSent);
+// Process and filter data - Split into two tables
+$: guestsNotSent = processGuests(guests.filter(g => !g.invite_sent), searchTermNotSent, sortField, sortDirection, 'all', 'all');
+$: guestsSent = processGuests(guests.filter(g => g.invite_sent), searchTermSent, sortField, sortDirection, filterRsvp, filterCheckIn);
 $: filteredGifts = processGiftsGroupedByGuest(gifts, giftSearchTerm, giftViewMode);
 
-// Pagination calculations
-$: totalGuestPages = Math.ceil(filteredGuests.length / guestsPerPage);
-$: paginatedGuests = filteredGuests.slice(
+// Pagination calculations for both tables
+$: totalNotSentPages = Math.ceil(guestsNotSent.length / guestsPerPage);
+$: paginatedGuestsNotSent = guestsNotSent.slice(
     (guestPage - 1) * guestsPerPage,
     guestPage * guestsPerPage
+);
+
+$: totalSentPages = Math.ceil(guestsSent.length / guestsPerPage);
+$: paginatedGuestsSent = guestsSent.slice(
+    (guestPageSent - 1) * guestsPerPage,
+    guestPageSent * guestsPerPage
 );
 
 $: totalGiftPages = Math.ceil(filteredGifts.length / giftPerPage);
@@ -212,101 +220,20 @@ $: paginatedGift = filteredGifts.slice(
     giftPage * giftPerPage
 );
 
+
+
+
+
+
 // ============================================================================
 // DATA LOADING & MANAGEMENT
 // ============================================================================
 
-/**
- * Load all dashboard data from Supabase
- */
-// async function loadDashboardData() {
-//     try {
-//         loading = true;
-//         console.log('loadDashboardData started');
-//         console.log('clientSlug:', clientSlug);
-//         // Fetch client data
-//         const { data: invite, error: inviteError } = await supabase
-//             .from('invites')
-//             // .select('*')
-//             .select(`
-//     *,
-//     events!invites_event_id_fkey (
-//         event_date,
-//         location
-//     )
-// `)
-//             .eq('slug', clientSlug)
-//             .single()
-            
-//         console.log('Invite response:', invite, inviteError);
-        
-//         if (inviteError || !invite) {
-//             errorMessage = 'Client not found';
-//             throw inviteError || new Error('Client not found');
-//         }
-//         clientData = invite;
-        
-//         // Load saved metrics preferences
-//         if (invite.dashboard_metrics) {
-//             if (Array.isArray(invite.dashboard_metrics)) {
-//                 // OLD format: array of keys → convert to object with default mode 'count'
-//                 selectedMetrics = invite.dashboard_metrics.reduce((acc, key) => {
-//                     acc[key] = { mode: 'count' };
-//                     return acc;
-//                 }, {});
-//             } else if (typeof invite.dashboard_metrics === 'object') {
-//                 // NEW format: already key/mode object
-//                 selectedMetrics = invite.dashboard_metrics;
-//             }
-//         }
-        
-//         // Fetch guests
-//         const { data: guestData, error: guestError } = await supabase
-//             .from('guests')
-//             .select('*')
-//             .eq('invite_id', invite.id)
-//             .order('full_name')
-//             .range(0, 49);
-            
-//         if (guestError) {
-//             errorMessage = 'Failed to load guest data';
-//             console.error(guestError);
-//             throw guestError;
-//         }
-//         guests = guestData || [];
-        
-//         // Fetch gifts with guest relationships
-//         const { data: giftData, error: giftError } = await supabase
-//             .from('gifts')
-//             .select(`
-//                 *,
-//                 guests!gifts_guest_id_fkey (
-//                     guest_id,
-//                     full_name,
-//                     phone
-//                 )
-//             `)
-//             .eq('invite_id', invite.id)
-//             .order('created_at', { ascending: false });
-
-//         if (giftError) {
-//             console.error('Error loading gifts:', giftError);
-//         } else {
-//             gifts = giftData || [];
-//         }
-        
-//     } catch (err) {
-//         console.error('Error loading dashboard data:', err);
-//         errorMessage = 'Failed to load dashboard data';
-//     } finally {
-//         loading = false;
-//     }
-// }
 async function loadDashboardData() {
     try {
         loading = true;
-        console.log('loadDashboardData started');
-        console.log('clientSlug:', clientSlug);
+        // console.log('loadDashboardData started');
+        // console.log('clientSlug:', clientSlug);
         
         // Get the invite first
         const { data: invite, error: inviteError } = await supabase
@@ -315,14 +242,14 @@ async function loadDashboardData() {
             .eq('slug', clientSlug)
             .single()
             
-        console.log('Invite query result:', { invite, inviteError });
+        // console.log('Invite query result:', { invite, inviteError });
         
         if (inviteError || !invite) {
             errorMessage = 'Client not found';
             throw inviteError || new Error('Client not found');
         }
         
-        console.log('Invite ID for event lookup:', invite.id);
+        // console.log('Invite ID for event lookup:', invite.id);
         
         // Get the related event data with detailed logging
         const { data: event, error: eventError } = await supabase
@@ -330,16 +257,17 @@ async function loadDashboardData() {
             .select('*') // Select all fields to see what's available
             .eq('invite_id', invite.id);
             
-        console.log('Event query result:', { 
-            event, 
-            eventError,
-            inviteId: invite.id,
-            eventCount: event?.length 
-        });
+    //     console.log('Event query result:', { 
+    //         event, 
+    //         eventError,
+    //         inviteId: invite.id,
+    //         eventCount: event?.length 
+    //     }
+    // );
         
         // Try different approaches if the first one fails
         if (!event || event.length === 0) {
-            console.log('No events found with invite_id, trying alternative queries...');
+            // console.log('No events found with invite_id, trying alternative queries...');
             
             // Try with different field names
             const { data: eventAlt1, error: eventError1 } = await supabase
@@ -347,7 +275,7 @@ async function loadDashboardData() {
                 .select('*')
                 .eq('id', invite.id); // Maybe it's a direct ID match
                 
-            console.log('Alternative query 1 (id = invite.id):', { eventAlt1, eventError1 });
+            // console.log('Alternative query 1 (id = invite.id):', { eventAlt1, eventError1 });
             
             // Try another common pattern
             const { data: eventAlt2, error: eventError2 } = await supabase
@@ -355,7 +283,7 @@ async function loadDashboardData() {
                 .select('*')
                 .eq('event_id', invite.id);
                 
-            console.log('Alternative query 2 (event_id = invite.id):', { eventAlt2, eventError2 });
+            // console.log('Alternative query 2 (event_id = invite.id):', { eventAlt2, eventError2 });
             
             // Show all events to see the structure
             const { data: allEvents, error: allEventsError } = await supabase
@@ -363,7 +291,7 @@ async function loadDashboardData() {
                 .select('*')
                 .limit(5);
                 
-            console.log('Sample events (first 5):', { allEvents, allEventsError });
+            // console.log('Sample events (first 5):', { allEvents, allEventsError });
         }
         
         // Use the first successful result
@@ -514,14 +442,21 @@ function calculatePercent(key) {
     return ((metrics[key] / base) * 100).toFixed(1);
 }
 
+
+//Handle Buttons
+
+function handleUploadGuests() {
+    goto(`/${clientSlug}/dashboard/upload-guests`);
+  }
+
 // ============================================================================
 // DATA PROCESSING & FILTERING
 // ============================================================================
 
 /**
- * Process and filter guest list
+ * Process and filter guest list (updated to remove invite_sent filter since we split the data)
  */
-function processGuests(guests, search, sortField, sortDirection, rsvpFilter, checkInFilter, inviteSentFilter) {
+function processGuests(guests, search, sortField, sortDirection, rsvpFilter, checkInFilter) {
     let result = [...guests];
     
     // Apply search filter
@@ -551,13 +486,6 @@ function processGuests(guests, search, sortField, sortDirection, rsvpFilter, che
     if (checkInFilter !== 'all') {
         result = result.filter(guest => {
             return checkInFilter === 'checked-in' ? guest.checked_in === true : guest.checked_in !== true;
-        });
-    }
-    
-    // Apply invite sent filter
-    if (inviteSentFilter !== 'all') {
-        result = result.filter(guest => {
-            return inviteSentFilter === 'sent' ? guest.invite_sent === true : guest.invite_sent !== true;
         });
     }
     
@@ -686,120 +614,192 @@ async function addGuest() {
 }
 
 /**
- * Delete selected guests
+ * Delete selected guests from Not Sent table
  */
-// async function deleteSelectedGuests() {
-//     if (selectedGuests.size === 0) return;
+async function deleteSelectedNotSentGuests() {
+    if (selectedGuestsNotSent.size === 0) return;
 
-//     try {
-//         isDeleting = true;
-//         const guestIds = Array.from(selectedGuests);
-        
-//         const { error, count } = await supabase
-//             .from('guests')
-//             .delete({ count: 'exact' })
-//             .in('guest_id', guestIds);
+    try {
+        isDeleting = true;
+        const guestIds = Array.from(selectedGuestsNotSent);
 
-//         if (error) {
-//             console.error('Supabase delete error:', error);
-//             alert(`Failed to delete guests: ${error.message}`);
-//             return;
-//         }
+        // Step 1: Delete all gifts associated with these guests
+        const { error: giftDeleteError } = await supabase
+            .from('gifts')
+            .delete()
+            .in('guest_id', guestIds);
 
-//         if (count === 0) {
-//             alert('No guests were deleted. This may be due to permission restrictions.');
-//             await loadDashboardData();
-//             return;
-//         }
+        if (giftDeleteError) {
+            console.error('Error deleting gifts:', giftDeleteError);
+            alert(`Failed to delete associated gifts: ${giftDeleteError.message}`);
+            return;
+        }
 
-//         console.log(`Successfully deleted ${count} guest(s)`);
-        
-//         await loadDashboardData();
-//         selectedGuests.clear();
-//         selectedGuests = selectedGuests;
-//         showDeleteConfirmation = false;
-        
-//     } catch (err) {
-//         console.error('Error deleting guests:', err);
-//         alert(`Failed to delete guests: ${err.message || 'Unknown error'}`);
-//     } finally {
-//         isDeleting = false;
-//     }
-// }
+        // Step 2: Now delete the guests
+        const { error: guestDeleteError, count } = await supabase
+            .from('guests')
+            .delete({ count: 'exact' })
+            .in('guest_id', guestIds);
 
-async function deleteSelectedGuests() {
-  if (selectedGuests.size === 0) return;
+        if (guestDeleteError) {
+            console.error('Error deleting guests:', guestDeleteError);
+            alert(`Failed to delete guests: ${guestDeleteError.message}`);
+            return;
+        }
 
-  try {
-    isDeleting = true;
-    const guestIds = Array.from(selectedGuests);
+        if (count === 0) {
+            alert('No guests were deleted. They may have already been removed.');
+        } else {
+            console.log(`Successfully deleted ${count} guest(s) and their gifts`);
+        }
 
-    // Step 1: Delete all gifts associated with these guests
-    const { error: giftDeleteError } = await supabase
-      .from('gifts')
-      .delete()
-      .in('guest_id', guestIds);
+        // Refresh data and reset state
+        await loadDashboardData();
+        selectedGuestsNotSent.clear();
+        selectedGuestsNotSent = selectedGuestsNotSent;
+        showDeleteConfirmation = false;
 
-    if (giftDeleteError) {
-      console.error('Error deleting gifts:', giftDeleteError);
-      alert(`Failed to delete associated gifts: ${giftDeleteError.message}`);
-      return;
+    } catch (err) {
+        console.error('Unexpected error during deletion:', err);
+        alert(`An unexpected error occurred: ${err.message || 'Unknown error'}`);
+    } finally {
+        isDeleting = false;
     }
-
-    // Step 2: Now delete the guests
-    const { error: guestDeleteError, count } = await supabase
-      .from('guests')
-      .delete({ count: 'exact' })
-      .in('guest_id', guestIds);
-
-    if (guestDeleteError) {
-      console.error('Error deleting guests:', guestDeleteError);
-      alert(`Failed to delete guests: ${guestDeleteError.message}`);
-      return;
-    }
-
-    if (count === 0) {
-      alert('No guests were deleted. They may have already been removed.');
-    } else {
-      console.log(`Successfully deleted ${count} guest(s) and their gifts`);
-    }
-
-    // Refresh data and reset state
-    await loadDashboardData();
-    selectedGuests.clear();
-    selectedGuests = selectedGuests;
-    showDeleteConfirmation = false;
-
-  } catch (err) {
-    console.error('Unexpected error during deletion:', err);
-    alert(`An unexpected error occurred: ${err.message || 'Unknown error'}`);
-  } finally {
-    isDeleting = false;
-  }
 }
 
 /**
- * Toggle guest selection
+ * Delete selected guests from Sent table
  */
-function toggleGuestSelection(guestId) {
-    if (selectedGuests.has(guestId)) {
-        selectedGuests.delete(guestId);
-    } else {
-        selectedGuests.add(guestId);
+async function deleteSelectedSentGuests() {
+    if (selectedGuestsSent.size === 0) return;
+
+    try {
+        isDeleting = true;
+        const guestIds = Array.from(selectedGuestsSent);
+
+        // Step 1: Delete all gifts associated with these guests
+        const { error: giftDeleteError } = await supabase
+            .from('gifts')
+            .delete()
+            .in('guest_id', guestIds);
+
+        if (giftDeleteError) {
+            console.error('Error deleting gifts:', giftDeleteError);
+            alert(`Failed to delete associated gifts: ${giftDeleteError.message}`);
+            return;
+        }
+
+        // Step 2: Now delete the guests
+        const { error: guestDeleteError, count } = await supabase
+            .from('guests')
+            .delete({ count: 'exact' })
+            .in('guest_id', guestIds);
+
+        if (guestDeleteError) {
+            console.error('Error deleting guests:', guestDeleteError);
+            alert(`Failed to delete guests: ${guestDeleteError.message}`);
+            return;
+        }
+
+        if (count === 0) {
+            alert('No guests were deleted. They may have already been removed.');
+        } else {
+            console.log(`Successfully deleted ${count} guest(s) and their gifts`);
+        }
+
+        // Refresh data and reset state
+        await loadDashboardData();
+        selectedGuestsSent.clear();
+        selectedGuestsSent = selectedGuestsSent;
+        showDeleteSentConfirmation = false;
+
+    } catch (err) {
+        console.error('Unexpected error during deletion:', err);
+        alert(`An unexpected error occurred: ${err.message || 'Unknown error'}`);
+    } finally {
+        isDeleting = false;
     }
-    selectedGuests = selectedGuests;
 }
 
 /**
- * Select/deselect all guests
+ * Mark selected sent guests as not sent
  */
-function selectAllGuests() {
-    if (selectedGuests.size === filteredGuests.length) {
-        selectedGuests.clear();
-    } else {
-        selectedGuests = new Set(filteredGuests.map(g => g.guest_id));
+async function markSelectedAsNotSent() {
+    if (selectedGuestsSent.size === 0) return;
+
+    try {
+        isMarkingNotSent = true;
+        const guestIds = Array.from(selectedGuestsSent);
+
+        const { error } = await supabase
+            .from('guests')
+            .update({ 
+                invite_sent: false,
+                invite_sent_at: null
+            })
+            .in('guest_id', guestIds);
+
+        if (error) throw error;
+
+        await loadDashboardData();
+        selectedGuestsSent.clear();
+        selectedGuestsSent = selectedGuestsSent;
+        showMarkNotSentConfirmation = false;
+
+    } catch (err) {
+        console.error('Error marking guests as not sent:', err);
+        alert('Failed to mark guests as not sent');
+    } finally {
+        isMarkingNotSent = false;
     }
-    selectedGuests = selectedGuests;
+}
+
+/**
+ * Toggle guest selection for Not Sent table
+ */
+function toggleNotSentGuestSelection(guestId) {
+    if (selectedGuestsNotSent.has(guestId)) {
+        selectedGuestsNotSent.delete(guestId);
+    } else {
+        selectedGuestsNotSent.add(guestId);
+    }
+    selectedGuestsNotSent = selectedGuestsNotSent;
+}
+
+/**
+ * Toggle guest selection for Sent table
+ */
+function toggleSentGuestSelection(guestId) {
+    if (selectedGuestsSent.has(guestId)) {
+        selectedGuestsSent.delete(guestId);
+    } else {
+        selectedGuestsSent.add(guestId);
+    }
+    selectedGuestsSent = selectedGuestsSent;
+}
+
+/**
+ * Select/deselect all guests in Not Sent table
+ */
+function selectAllNotSentGuests() {
+    if (selectedGuestsNotSent.size === guestsNotSent.length) {
+        selectedGuestsNotSent.clear();
+    } else {
+        selectedGuestsNotSent = new Set(guestsNotSent.map(g => g.guest_id));
+    }
+    selectedGuestsNotSent = selectedGuestsNotSent;
+}
+
+/**
+ * Select/deselect all guests in Sent table
+ */
+function selectAllSentGuests() {
+    if (selectedGuestsSent.size === guestsSent.length) {
+        selectedGuestsSent.clear();
+    } else {
+        selectedGuestsSent = new Set(guestsSent.map(g => g.guest_id));
+    }
+    selectedGuestsSent = selectedGuestsSent;
 }
 
 // ============================================================================
@@ -1116,16 +1116,16 @@ function fillTemplate(template, guest, giftGroup = null) {
     }
 
     // Debug log to verify the values
-    console.log('Template replacement values:', {
-        guest_name: guest.full_name,
-        client_name: clientData?.client_name,
-        event_date: eventDate,
-        location: location,
-        rsvp_deadline: rsvpDeadline,
-        raw_event_date: clientData?.event_date,
-        raw_location: clientData?.location,
-        raw_rsvp_deadline: clientData?.rsvp_deadline
-    });
+    // console.log('Template replacement values:', {
+    //     guest_name: guest.full_name,
+    //     client_name: clientData?.client_name,
+    //     event_date: eventDate,
+    //     location: location,
+    //     rsvp_deadline: rsvpDeadline,
+    //     raw_event_date: clientData?.event_date,
+    //     raw_location: clientData?.location,
+    //     raw_rsvp_deadline: clientData?.rsvp_deadline
+    // });
 
     return template
         .replace(/{guest_name}/g, guest.full_name)
@@ -1224,6 +1224,7 @@ function closeMessagePreviewModal() {
     selectedGiftGroupForPreview = null;
     messageType = '';
 }
+
 
 /**
  * Mark invite as sent
@@ -1389,15 +1390,15 @@ function insertVariable(variable) {
 /**
  * Handle guest row click for navigation
  */
-function handleGuestRowClick(guest, event) {
-    if (event.target.type === 'checkbox' || 
-        event.target.closest('button') || 
-        event.target.closest('input[type="checkbox"]')) {
-        return;
-    }
+// function handleGuestRowClick(guest, event) {
+//     if (event.target.type === 'checkbox' || 
+//         event.target.closest('button') || 
+//         event.target.closest('input[type="checkbox"]')) {
+//         return;
+//     }
     
-    goto(`/${clientSlug}/dashboard/details/${guest.guest_id}`);
-}
+//     goto(`/${clientSlug}/dashboard/details/${guest.guest_id}`);
+// }
 
 /**
  * Handle gift row click
@@ -1425,12 +1426,11 @@ function setSortField(field) {
 }
 
 /**
- * Reset all filters
+ * Reset filters (only affects sent table now)
  */
 function resetFilters() {
     filterRsvp = 'all';
     filterCheckIn = 'all';
-    filterInviteSent = 'all';
     showFilterMenu = false;
     expandedAction = null;
 }
@@ -1489,10 +1489,17 @@ function handleClickOutsideGuestSearch(event) {
 // ============================================================================
 
 /**
- * Navigate to guest page
+ * Navigate to guest page for Not Sent table
  */
-function goToGuestPage(page) {
-    if (page >= 1 && page <= totalGuestPages) guestPage = page;
+function goToNotSentGuestPage(page) {
+    if (page >= 1 && page <= totalNotSentPages) guestPage = page;
+}
+
+/**
+ * Navigate to guest page for Sent table
+ */
+function goToSentGuestPage(page) {
+    if (page >= 1 && page <= totalSentPages) guestPageSent = page;
 }
 
 /**
@@ -1549,13 +1556,39 @@ onMount(async () => {
         document.removeEventListener('click', handleClickOutsideGuestSearch);
     };
 });
+
+  $: if (browser) {
+    const anyModalOpen =
+      showMessagePreviewModal ||
+      showAddGuestModal ||
+      showAddGiftModal ||
+      showEditGiftModal;
+
+    document.documentElement.classList.toggle('no-scroll', anyModalOpen);
+  }
+
+  // clean up on page destroy (important for navigation)
+  onDestroy(() => {
+    if (browser) {
+      document.documentElement.classList.remove('no-scroll');
+      document.body.style.overflow = ""; // extra safety
+    }
+  });
+
+
 </script>
 
-<style>
+<svelte:head>
+     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</svelte:head>
+
+<style lang="postcss">
+  @reference "tailwindcss";
+@import 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'
 /* ============================================================================
    FONTS & ANIMATIONS
    ============================================================================ */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
 
 @keyframes spin {
     to { transform: rotate(360deg); }
@@ -1565,13 +1598,13 @@ onMount(async () => {
    GLOBAL STYLES
    ============================================================================ */
 :global(html) {
-    font-family: 'DM Sans', sans-serif;
+   
 }
 
 :global(body) {
     margin: 0;
     padding: 0;
-    background: #ffffff;
+    background: #FAFAF8;
 }
 
 /* ============================================================================
@@ -1580,38 +1613,108 @@ onMount(async () => {
 .dashboard-container {
     display: flex;
     min-height: 100vh;
+   
 }
 
 .main-content {
+   
     flex: 1;
     display: flex;
     flex-direction: column;
+    background: #FAFAF8;
+   
 }
 
 .dashboard-content {
-    padding: 20px 60px;
+    padding: 20px 80px;
+    margin-top:20px;
 }
 
-.breadcrumb {
-    background: white;
+/* .breadcrumb {
+  
     padding: 16px 24px;
     position: sticky;
     top: 0;
     z-index: 10;
+    border-bottom:0.75px solid #ABABAB
 }
 
 .breadcrumb-path {
     font-size: 14px;
     color: #737373;
+} */
+
+/*Empty Dashboard State*/
+
+.empty-dashboard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 70vh; 
+  text-align: center;
+  border-bottom: 0.75px solid #ABABAB; 
 }
+
+.empty-content {
+  max-width: 25vw;
+}
+
+.empty-title {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 2.75em; 
+    line-height: 1.25em;
+    font-weight: 400;
+    letter-spacing:0.025em;
+    color: #111;
+    margin: 2rem 0 0 0;
+}
+
+.empty-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+
+.uploadguest-btn{
+    margin-top:2rem;
+     padding: 24px 48px;
+  border-radius: 50px;
+  border: 1px solid black;
+  display: inline-flex; 
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 300ms ease-in 100ms;
+}
+
+.uploadguest-icon {
+    fill: #000;
+  transition: fill 300ms ease-in 100ms;
+}
+
+.uploadguest-label{
+    font-family:'DM Sans',sans-serif;
+   margin-left:1rem;
+   font-weight:500;
+   font-size:1.5em;
+    color:#000;
+      transition: color 300ms ease-in 100ms;
+}
+
+.uploadguest-btn:hover {
+  transform:scale(1.02);
+}
+
+
 
 /* ============================================================================
    SIDEBAR
    ============================================================================ */
 .sidebar {
-    width: 280px;
-    background: #FAF8F8;
-    border-right: 0.25px solid #d4d4d4;
+    width: 15vw;
+    background: #FAFAF8;
+    border-right: 0.75px solid #ABABAB;
     display: flex;
     flex-direction: column;
     position: sticky;
@@ -1621,14 +1724,16 @@ onMount(async () => {
 }
 
 .sidebar.collapsed {
-    width: 74px;
+    width: 6vw;
 }
 
 .sidebar-header {
-    margin: 8px;
+    padding:1rem;
     display: flex;
     align-items: center;
     gap: 8px;
+    margin-top:2rem;
+    
 }
 
 .sidebar-toggle {
@@ -1671,35 +1776,38 @@ onMount(async () => {
 /* Navigation */
 .nav-menu {
     flex: 1;
-    padding: 12px 0;
+    padding: 2rem 0;
 }
 
 .nav-item {
     display: flex;
     align-items: center;
-    padding: 14px 14px;
+    padding: 1.5rem 2rem;
     margin: 10px;
-    color: #525252;
+    color: #000000;
     text-decoration: none;
     transition: all 300ms ease-in 100ms;
     cursor: pointer;
     position: relative;
+    font-family:'DM Sans',sans-serif;
+
 }
 
 .nav-item:hover {
-    background: #e8e8e8;
-    padding: 14px 16px;
+    background: #e5e6f6;
+    padding: 1.5rem 2rem;
     border-radius: 10px;
     margin: 10px;
     color: #000;
 }
 
 .nav-item.active {
-    background: #e8e8e8;
+   
+    background: #D9DBF9;
     margin: 10px;
     border-radius: 10px;
     color: #000;
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .sidebar.collapsed .nav-item {
@@ -1725,9 +1833,14 @@ onMount(async () => {
 }
 
 .nav-label {
+    font-family:'DM Sans',sans-serif;
+    font-size:1.25em;
+    font-weight:500;
+    letter-spacing:0.005em;
     white-space: nowrap;
     overflow: hidden;
     transition: opacity 300ms ease-in;
+    margin-left:2rem;
 }
 
 .sidebar.collapsed .nav-label {
@@ -1794,62 +1907,99 @@ onMount(async () => {
    ============================================================================ */
 .metrics-section {
     margin-bottom: 32px;
+    /* border-bottom:0.75px solid #ABABAB */
+    
 }
 
 .section-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
+    align-items: flex-end;
+    margin-bottom: 30px;
 }
 
 .section-title {
-    font-family: 'Romie Regular', serif;
-    font-size: 40px;
-    line-height: 52px;
-    letter-spacing: 0.03em;
-    font-weight: 400;
-    color: #000;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 2.75em; /* smaller than before */
+    font-weight: 500;
+    letter-spacing:0.025em;
+    color: #111;
+    /* margin: 2rem 0 0 0; */
+}
+
+.section-description {
+    font-family: 'DM Sans', sans-serif;
+    font-size:  1.5em;
+    font-weight: 250;
+    letter-spacing:0.02em;
+    color: #444;
+    opacity: 0.8;
+}
+
+.uploadguests-btn{
+       padding:24px 48px;
+    border-radius: 999px;
+   border:1px solid #ababab;
+   font-family:'DM Sans', sans-serif;
+   font-size:1.5em;
+    /* background: #D9D9D9; */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 300ms ease-in 100ms;
+}
+
+.uploadguests-icon{
+    margin-right:1rem;
+}
+
+.section-text-block {
+    display: flex;
+    flex-direction: column;
 }
 
 /* ============================================================================
    METRICS
    ============================================================================ */
+
 .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
 }
 
 .metric-card {
-    background: black;
-    border-radius: 12px;
-    padding: 24px;
+    background: linear-gradient(2200deg, #ABB1EF 0%, #E9EBFF 100%);
+    border-radius: 20px;
+    padding: 2rem 1rem 3rem 2rem;
     border: none;
-    transition: all 300ms ease-in 100ms;
+    text-align:left;
+    transition: all 0.2s ease-in-out;
 }
 
-.metric-card:hover {
+/* .metric-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
+} */
 
 .metric-label {
-    font-size: 18px;
-    line-height: 20px;
-    color: #FAF8F8;
+    font-family:'DM Sans',sans-serif;
+    font-size: 1.5em;
+    font-weight:550;
+    letter-spacing:0.015em;
+    color: #000;
+    opacity:80%;
     margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display:flex;
+    align-items:flex-start;
 }
 
 .metric-value {
-    font-size: 140px;
+    font-size: 4.75em; /* smaller, closer to screenshot */
     font-weight: 700;
-    color: #FFFFFF;
-    line-height: 1;
-    text-align: right;
+    color: #000;
+    line-height: 1.2;
 }
 
 .metric-subtitle {
@@ -1878,13 +2028,12 @@ onMount(async () => {
     background: #f5f5f5;
     transform: scale(1.03);
 }
-
 .settings-btn {
-    width: 40px;
-    height: 40px;
+    width: 4rem;
+    height: 4rem;
     border-radius: 12px;
-    border: 0.5px solid #d4d4d4;
-    background: white;
+   border:0.75px solid #ababab;
+    /* background: #D9D9D9; */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1893,7 +2042,7 @@ onMount(async () => {
 }
 
 .settings-btn:hover {
-    background: #f5f5f5;
+    background: #eee4e4;
     transform: scale(1.03);
 }
 
@@ -1928,12 +2077,22 @@ onMount(async () => {
 /* ============================================================================
    TABLES
    ============================================================================ */
+
+.section-header.table {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0;
+}
+
+
+
 .table-container {
-    background: white;
-    border-radius: 12px;
-    padding: 24px;
+    
+    border-radius: 10px;
+    padding: 2rem;
     margin-bottom: 24px;
-    border: 0.5px solid #d4d4d4;
+    border: 0.75px solid #ABABAB;
 }
 
 .table-actions {
@@ -1952,9 +2111,10 @@ onMount(async () => {
     text-align: left;
     padding: 12px;
     border-bottom: 0.5px solid #d4d4d4;
+    font-family:'DM Sans',sans-serif;
     font-weight: 600;
     color: #525252;
-    font-size: 12px;
+    font-size: 1em;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -1963,7 +2123,7 @@ onMount(async () => {
     padding: 16px 12px;
     border-bottom: 0.25px solid #e5e5e5;
     color: #262626;
-    font-size: 14px;
+    font-size: 1em;
 }
 
 .data-table tr:hover td {
@@ -1985,6 +2145,9 @@ onMount(async () => {
 }
 
 .name-cell {
+    font-family:'DM Sans',sans-serif;
+    font-weight:300;
+    font-size:1em;
     cursor: pointer;
     transition: color 200ms ease-in-out;
 }
@@ -1997,9 +2160,9 @@ onMount(async () => {
    ACTION BUTTONS
    ============================================================================ */
 .action-btn-db {
-    height: 36px;
-    padding: 0 18px;
-    border-radius: 12px;
+    height: 2rem;
+    padding: 1.375rem 1.375rem;
+    border-radius: 50px;
     background: black;
     display: flex;
     align-items: center;
@@ -2017,7 +2180,7 @@ onMount(async () => {
 
 .action-btn {
     height: 36px;
-    padding: 0 12px;
+     padding: 1.375rem 1.375rem;
     border-radius: 12px;
     background: white;
     display: flex;
@@ -2026,6 +2189,7 @@ onMount(async () => {
     transition: background-color 300ms ease-in, transform 300ms ease-in;
     position: relative;
     overflow: hidden;
+    border: 0.5px solid #d4d4d4;
 }
 
 .action-btn:hover {
@@ -2063,6 +2227,7 @@ onMount(async () => {
     max-width: 0;
     overflow: hidden;
     transition: max-width 300ms ease-in 100ms, margin-left 300ms ease-in 100ms;
+    color: white;
 }
 
 .action-label-delete.visible {
@@ -2091,9 +2256,29 @@ onMount(async () => {
     transition: 200ms ease-in;
 }
 
-.send-btn:hover {
-    background: #1ea855 !important;
-    transform: scale(1.05);
+.whatsapp-btn{
+    padding: 0.75rem 1.25rem;
+    border-radius:6px;
+    background: #00782e; 
+    color: white; 
+    border: none;
+    font-size: 0.75em;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+      display: flex;
+    align-items: center;
+    cursor: pointer;
+    transition: all 300ms ease-in;
+    position: relative;
+ 
+}
+
+.whatsapp-btn-label{
+   margin-left:10px;
+}
+
+.whatsapp-btn:hover{
+    transform:scale(1.02);
 }
 
 .sent-btn {
@@ -2112,23 +2297,28 @@ onMount(async () => {
 .search-container {
     position: relative;
     width: 400px;
-    margin: 16px 0;
+    margin: 32px 0;
 }
 
 .search-input {
     width: 100%;
-    height: 40px;
+    display:flex;
+    align-items:flex-end;
+    height: 3rem;
     padding: 0 40px 0 12px;
     border: 0.5px solid #d4d4d4;
     border-radius: 12px;
-    font-size: 14px;
+    font-size: 1rem;
     font-family: 'DM Sans', sans-serif;
     transition: all 300ms ease-in 100ms;
 }
 
+
+
 .search-input:focus {
     outline: none;
-    border-color: #000;
+    border-color: #888888;
+
 }
 
 .search-icon {
@@ -2269,9 +2459,9 @@ onMount(async () => {
    ============================================================================ */
 .badge {
     display: inline-block;
-    padding: 4px 12px;
+    padding: 0.5rem 1rem;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 0.75em;
     font-weight: 600;
     letter-spacing: 0.03em;
 }
@@ -2297,8 +2487,8 @@ onMount(async () => {
 }
 
 .badge-secondary {
-    background: #f5f5f5;
-    color: #737373;
+    background: #F2835D;
+    color: #4E2517;
 }
 
 /* ============================================================================
@@ -2481,7 +2671,7 @@ onMount(async () => {
 }
 
 .modal-content {
-    background: white;
+    background: #FAFAF8;
     border-radius: 12px;
     padding: 24px;
     max-width: 500px;
@@ -2495,6 +2685,7 @@ onMount(async () => {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
+    
 }
 
 .modal-title {
@@ -2723,9 +2914,19 @@ onMount(async () => {
 }
 
 .character-count {
-    font-size: 12px;
+    font-size: 1em;
     color: #737373;
     font-weight: 500;
+}
+
+.change-globaltemp {
+    font-size: 1em;
+    color: black;
+    font-weight: 500;
+    text-decoration:underline;
+    text-decoration-color:#ababab;
+    text-underline-offset:4px;
+    opacity:50%;
 }
 
 .template-tip {
@@ -2738,11 +2939,13 @@ onMount(async () => {
 
 /* Message Preview Modal */
 .recipient-info {
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
+    border:1px solid #d4d4d4;
+    background:white;
+    padding:1rem;
     border-radius: 8px;
-    padding: 16px;
+   
     margin-bottom: 20px;
+   
 }
 
 .recipient-header {
@@ -2750,35 +2953,39 @@ onMount(async () => {
     align-items: center;
     margin-bottom: 8px;
     color: #6c757d;
-    font-size: 14px;
+    font-size: 1em;
     font-weight: 500;
 }
 
 .recipient-label {
-    margin-left: 6px;
+     font-family:'DM Sans',sans-serif;
+   
 }
 
 .recipient-details {
-    margin-left: 26px;
+    
 }
 
 .recipient-name {
-    font-size: 16px;
+    font-size: 1.5em;
     font-weight: 600;
-    color: #212529;
+     color: #000000;
     margin-bottom: 4px;
 }
 
 .recipient-phone {
-    font-size: 14px;
-    color: #495057;
+    
+    font-size: 1.5em;
+    color: #000000;
+    opacity:80%;
     font-family: monospace;
-    background: #e9ecef;
+    background: #C1C7EB;
     padding: 2px 6px;
     border-radius: 4px;
     display: inline-block;
     margin-bottom: 4px;
 }
+
 
 .recipient-email {
     font-size: 13px;
@@ -2786,16 +2993,27 @@ onMount(async () => {
 }
 
 .message-textarea {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
-    transition: border-color 200ms ease-in;
+   width: 100%; 
+   min-height: 280px;
+    resize: vertical; 
+    font-family: 'DM Sans', sans-serif; 
+    font-size: 1em; 
+    line-height: 1.5; 
+    padding: 16px; 
+    border: 1px solid #d4d4d4; 
+    border-radius: 8px; 
+    background: white;
 }
 
 .message-textarea:focus {
     outline: none;
     border-color: #25D366 !important;
     box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.1);
+}
+
+.message-editor-footer {
+    display:flex;
+    justify-content:space-between;
 }
 
 /* ============================================================================
@@ -2807,7 +3025,7 @@ onMount(async () => {
 
 .form-label {
     display: block;
-    font-size: 14px;
+    font-size: 1em;
     font-weight: 500;
     color: #525252;
     margin-bottom: 8px;
@@ -2818,7 +3036,7 @@ onMount(async () => {
     padding: 12px;
     border: 0.5px solid #d4d4d4;
     border-radius: 12px;
-    font-size: 14px;
+    font-size: 1em;
     font-family: 'DM Sans', sans-serif;
     transition: all 300ms ease-in 100ms;
 }
@@ -2868,6 +3086,17 @@ onMount(async () => {
 .btn-secondary:hover {
     background: #f5f5f5;
 }
+
+/* Custom utility classes */
+.mx-3 { margin-left: 0.75rem; margin-right: 0.75rem; }
+.my-3 { margin-top: 0.75rem; margin-bottom: 0.75rem; }
+.ml-2 { margin-left: 0.5rem; }
+.hover\:scale-101:hover { transform: scale(1.01); }
+.font-semibold { font-weight: 600; }
+.tracking-\[0\.33px\] { letter-spacing: 0.33px; }
+.visible { visibility: visible; }
+.\!bg-red-600 { background-color: rgb(220 38 38) !important; }
+.scale-80 { transform: scale(0.8); }
 
 /* ============================================================================
    RESPONSIVE
@@ -2952,7 +3181,10 @@ onMount(async () => {
         <!-- Sidebar -->
         <aside class="sidebar" class:collapsed={sidebarCollapsed}>
             <div class="sidebar-header">
-                <button class="sidebar-toggle" on:click={() => sidebarCollapsed = !sidebarCollapsed}>
+                <div class="client-info">
+                    <div class="client-name"><img class="scale-80" src="/landingpage/withloveheader.svg"  alt=""></div>
+                </div>
+                <!-- <button class="sidebar-toggle" on:click={() => sidebarCollapsed = !sidebarCollapsed}>
                     <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {#if sidebarCollapsed}
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -2960,29 +3192,27 @@ onMount(async () => {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                         {/if}
                     </svg>
-                </button>
-                <div class="client-info">
-                    <div class="client-name">WITH LOVE</div>
-                </div>
+                </button> -->
+                
             </div>
             
             <nav class="nav-menu">
                 <a href="/{clientSlug}/dashboard" class="nav-item active">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <!-- <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                    </svg>
+                    </svg> -->
                     <span class="nav-label">Dashboard</span>
                 </a>
                 <a href="/{clientSlug}/dashboard/checkin" class="nav-item">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <!-- <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
-                    </svg>
+                    </svg> -->
                     <span class="nav-label">Check-In Scan</span>
                 </a>
                 <a href="/{clientSlug}/dashboard/upload-guests" class="nav-item">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <!-- <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                    </svg>
+                    </svg> -->
                     <span class="nav-label">Upload Guest List</span>
                 </a>
                 
@@ -3011,8 +3241,8 @@ onMount(async () => {
                         <div class="client-details">
                             <div class="client-name">{clientData?.client_name || 'Wedding'}</div>
                             <div class="client-sub">
-                                {#if clientData?.event_date}
-                                    {new Date(clientData.event_date).toLocaleDateString('en-US', {
+                                {#if clientData?.events?.event_date}
+                                    {new Date(clientData.events.event_date).toLocaleDateString('en-US', {
                                         month: 'short', day: 'numeric', year: 'numeric'
                                     })}
                                 {/if}
@@ -3025,56 +3255,76 @@ onMount(async () => {
 
         <!-- Main Content -->
         <main class="main-content">
-             <!-- Cursor-following tooltip -->
-                <!-- <div
-                class="cursor-tooltip"
-                class:visible={showTooltip}
-                style="top: {tooltipY}px; left: {tooltipX}px;"
-                >
-                Click to see details
-                </div> -->
             <!-- Breadcrumb -->
-            <div class="breadcrumb">
+            <!-- <div class="breadcrumb">
                 <div class="breadcrumb-path">{currentRoute}</div>
-            </div>
+            </div> -->
 
             <!-- Dashboard Content -->
             <div class="dashboard-content">
                 <!-- Key Metrics -->
                 <section class="metrics-section">
                     <div class="section-header">
-                        <h1 class="section-title mx-3 my-3">Key Metrics</h1>
-                      
-                        <button class="settings-btn" on:click={() => showMetricsSettings = !showMetricsSettings}>
-                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <div class="section-text-block">
+                        <h1 class="section-title">Dashboard</h1>
+                        <h3 class="section-description">See your wedding metrics, send and manage your invites here</h3>
+            
+                     
+                    </div>
+                     <button
+                on:click={handleUploadGuests}
+                class="uploadguests-btn"
+              ><svg fill="currentColor" width="28px" height="28px" viewBox="0 0 24 24" id="upload" data-name="Flat Line" xmlns="http://www.w3.org/2000/svg" class="uploadguests-icon"><line id="primary" x1="12" y1="16" x2="12" y2="3" style="fill: none; stroke: rgb(0, 0, 0); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></line><polyline id="primary-2" data-name="primary" points="16 7 12 3 8 7" style="fill: none; stroke: rgb(0, 0, 0); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></polyline><path id="primary-3" data-name="primary" d="M20,16v4a1.08,1.08,0,0,1-1.14,1H5.14A1.08,1.08,0,0,1,4,20V16" style="fill: none; stroke: rgb(0, 0, 0); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path></svg>Import Guests </button>
+                       <button class="settings-btn" on:click={() => showMetricsSettings = !showMetricsSettings}>
+                            <svg width="28px" height="28px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
                             </svg>
                         </button>
+                         
                     </div>
-                    
                     <div class="metrics-grid">
-    {#each Object.keys(selectedMetrics) as metricKey}
-        <div class="metric-card">
-            <div class="metric-label">{availableMetrics[metricKey].label}</div>
-            <div class="metric-value">
-                {#if selectedMetrics[metricKey]?.mode === 'percent'}
-                    {calculatePercent(metricKey)}%
-                {:else}
-                    {metrics[metricKey]}
-                {/if}
-            </div>
-        </div>
-    {/each}
-</div>
+                        {#each Object.keys(selectedMetrics) as metricKey}
+                            <div class="metric-card">
+                                <div class="metric-label">{availableMetrics[metricKey].label}</div>
+                                <div class="metric-value">
+                                    {#if selectedMetrics[metricKey]?.mode === 'percent'}
+                                        {calculatePercent(metricKey)}%
+                                    {:else}
+                                        {metrics[metricKey]}
+                                    {/if}
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
                 </section>
 
-                <!-- Guest List -->
-                <section class="table-container">
-                    <h2 class="section-title mx-3 my-3">Guest List</h2>
+             
+            
 
+<!--Empty dashboard state-->
+{#if guestsNotSent.length === 0 && guestsSent.length === 0}
+  <section class="empty-dashboard">
+  <div class="empty-content">
+    <p class="empty-title">Your dashboard is currently empty.</p>
+    <p class="empty-title">Let’s get the party started by importing your guests.</p>
+    <div class="empty-actions">
+      <button class="uploadguest-btn" on:click={handleUploadGuests}>
+        <svg fill="currentColor" width="20px" height="20px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8.71,7.71,11,5.41V15a1,1,0,0,0,2,0V5.41l2.29,2.3a1,1,0,0,0,1.42,0,1,1,0,0,0,0-1.42l-4-4a1,1,0,0,0-.33-.21,1,1,0,0,0-.76,0,1,1,0,0,0-.33.21l-4,4A1,1,0,1,0,8.71,7.71ZM21,12a1,1,0,0,0-1,1v6a1,1,0,0,1-1,1H5a1,1,0,0,1-1-1V13a1,1,0,0,0-2,0v6a3,3,0,0,0,3,3H19a3,3,0,0,0,3-3V13A1,1,0,0,0,21,12Z"/></svg>
+        <span class="uploadguest-label">Import Guests</span>
+      </button>
+    </div>
+  </div>
+</section>
+{/if}
+
+{#if guestsSent.length > 0}
+                 <!-- Invites Sent Table -->
+                <section class="table-container">
+                    <h2 class="section-title">Invites Sent</h2>
+                    <h4 class="section-description">Track RSVP & Check-in status on invites you've sent.</h4>
                     <div class="section-header">
                         <div class="search-container">
-                            <input type="text" class="search-input" placeholder="Search guests..." bind:value={searchTerm}>
+                            <input type="text" class="search-input" placeholder="Search guests..." bind:value={searchTermSent}>
                             <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                             </svg>
@@ -3110,12 +3360,6 @@ onMount(async () => {
                                         </button>
                                         <button class="dropdown-item" class:active={sortField === 'checked_in'} on:click={() => setSortField('checked_in')}>
                                             Check-in {sortField === 'checked_in' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                                        </button>
-                                        <button class="dropdown-item" class:active={sortField === 'invite_sent'} on:click={() => setSortField('invite_sent')}>
-                                            Invite Sent {sortField === 'invite_sent' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                                        </button>
-                                        <button class="dropdown-item" class:active={sortField === 'guest_count'} on:click={() => setSortField('guest_count')}>
-                                            Guest Count {sortField === 'guest_count' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                                         </button>
                                     </div>
                                 {/if}
@@ -3158,15 +3402,6 @@ onMount(async () => {
                                             </select>
                                         </div>
                                         
-                                        <div class="filter-section">
-                                            <label class="filter-label">Invite Status:</label>
-                                            <select bind:value={filterInviteSent} class="filter-select">
-                                                <option value="all">All</option>
-                                                <option value="sent">Sent</option>
-                                                <option value="not-sent">Not Sent</option>
-                                            </select>
-                                        </div>
-                                        
                                         <div class="filter-actions">
                                             <button class="filter-reset-btn" on:click={resetFilters}>Reset</button>
                                         </div>
@@ -3181,63 +3416,53 @@ onMount(async () => {
                                 <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
                             </button>
 
-                            {#if selectedGuests.size > 0}
-                                <button class="action-btn-delete" on:click={() => showDeleteConfirmation = true} on:mouseenter={() => hoveredAction = 'delete'} on:mouseleave={() => hoveredAction = null}>
+                            {#if selectedGuestsSent.size > 0}
+                                <button class="action-btn" on:click={() => showMarkNotSentConfirmation = true} style="background: #f59e0b; color: white;" on:mouseenter={() => hoveredAction = 'markNotSent'} on:mouseleave={() => hoveredAction = null}>
+                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                                    </svg>
+                                    <span class="action-label" class:expanded={hoveredAction === 'markNotSent'}>Mark Not Sent ({selectedGuestsSent.size})</span>
+                                </button>
+
+                                <button class="action-btn-delete" on:click={() => showDeleteSentConfirmation = true} on:mouseenter={() => hoveredAction = 'delete'} on:mouseleave={() => hoveredAction = null}>
                                     <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
-                                    <span class="action-label-delete font-semibold tracking-[0.33px] visible">Delete ({selectedGuests.size})</span>
+                                    <span class="action-label-delete font-semibold tracking-[0.33px] visible">Delete ({selectedGuestsSent.size})</span>
                                 </button>
                             {/if}
-                            
-                            <button class="action-btn-db ml-2 hover:scale-101" on:click={() => showAddGuestModal = true} on:mouseenter={() => hoveredAction = 'add'} on:mouseleave={() => hoveredAction = null}>
-                                <span class="action-label-db tracking-[0.33px] font-semibold">Add Guest</span>
-                            </button>
                         </div>
                     </div>
-
 
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <th style="width: 40px;">
                                     <input type="checkbox" 
-                                        checked={selectedGuests.size === filteredGuests.length && filteredGuests.length > 0}
-                                        on:change={selectAllGuests}
+                                        checked={selectedGuestsSent.size === guestsSent.length && guestsSent.length > 0}
+                                        on:change={selectAllSentGuests}
                                         style="width:22px; height:22px;">
                                 </th>
                                 <th>Name</th>
                                 <th>Phone</th>
                                 <th>RSVP Status</th>
                                 <th>Check-in Status</th>
-                                <th>Invite Sent</th>
-                                <th>Dietary Restrictions</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {#each paginatedGuests as guest}
+                            {#each paginatedGuestsSent as guest}
                                 {@const rsvpStatus = getRsvpStatusBadge(guest.rsvp_status)}
                                 {@const checkInStatus = getCheckInStatusBadge(guest.checked_in)}
-                                {@const inviteStatus = getInviteStatusBadge(guest.invite_sent)}
-                               <tr
-                                    class="clickable-row"
-                                    on:click={(e) => handleGuestRowClick(guest, e)}
-                                  
-                                    >
+                               <tr class="clickable-row" on:click={(e) => handleGuestRowClick(guest, e)}>
                                     <td>
                                         <input type="checkbox"
-                                            checked={selectedGuests.has(guest.guest_id)}
-                                            on:change={() => toggleGuestSelection(guest.guest_id)}
+                                            checked={selectedGuestsSent.has(guest.guest_id)}
+                                            on:change={() => toggleSentGuestSelection(guest.guest_id)}
                                             style="width:22px; height:22px">
                                     </td>
                                     <td>
-                                        <div 
-                                            class="name-cell" 
-                                            style="font-weight: 500;">
-                                            <!--on:mouseenter={handleRowMouseEnter}
-                                    on:mousemove={handleRowMouseMove}
-                                    on:mouseleave={handleRowMouseLeave}-->
+                                        <div class="name-cell" style="font-weight: 500;">
                                             {guest.full_name || 'N/A'}
                                         </div>
                                         {#if guest.email}
@@ -3247,31 +3472,131 @@ onMount(async () => {
                                     <td>{guest.phone || '-'}</td>
                                     <td><span class="badge {rsvpStatus.class}">{rsvpStatus.text}</span></td>
                                     <td><span class="badge {checkInStatus.class}">{checkInStatus.text}</span></td>
-                                    <td><span class="badge {inviteStatus.class}">{inviteStatus.text}</span></td>
-                                    <td>{guest.dietary_restriction || '-'}</td>
+                                    <td>
+                                        <button 
+                                            class="action-btn" 
+                                            style="height: 28px; background: #3b82f6; color: white; border: none;"
+                                            on:click|stopPropagation={() => goto(`/${clientSlug}/dashboard/details/${guest.guest_id}`)}
+                                            title="See Guest Details">
+                                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                            </svg>
+                                            <span style="margin-left: 4px; font-size: 12px;">View Details</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                            {/each}
 
-                                   <td>
-                                        {#if !guest.invite_sent && guest.phone}
+                            {#if guestsSent.length === 0}
+                                <tr>
+                                    <td colspan="6" style="text-align: center; padding: 48px; color: #737373;">
+                                        {searchTermSent ? 'No guests found matching your search.' : 'No invites have been sent yet.'}
+                                    </td>
+                                </tr>
+                            {/if}
+                        </tbody>
+                    </table>
+                    
+                    <div class="pagination">
+                        <button on:click={() => goToSentGuestPage(guestPageSent - 1)} disabled={guestPageSent === 1}>Prev</button>
+                        {#each Array(totalSentPages) as _, index}
+                            <button 
+                                class:active={guestPageSent === index + 1}
+                                on:click={() => goToSentGuestPage(index + 1)}>
+                                {index + 1}
+                            </button>
+                        {/each}
+                        <button on:click={() => goToSentGuestPage(guestPageSent + 1)} disabled={guestPageSent === totalSentPages}>Next</button>
+                    </div>
+                </section>
+{/if}
+
+{#if guestsNotSent.length > 0}
+                <!-- Invites Not Sent Table -->
+                <section class="table-container">
+                    <h2 class="section-title">Invites Not Sent</h2>
+                     <h3 class="section-description">Find all your newly imported guests here.</h3>
+
+                    <div class="section-header table">
+                        <div class="search-container">
+                            <input type="text" class="search-input" placeholder="Search guests..." bind:value={searchTermNotSent}>
+                            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                        </div>
+                        
+                        <div class="table-actions" on:click={handleClickOutside}>
+                            <button class="action-btn" on:click={refreshData} on:mouseenter={() => hoveredAction = 'refresh'} on:mouseleave={() => hoveredAction = null}>
+                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
+                            </button>
+
+                            {#if selectedGuestsNotSent.size > 0}
+                                <button class="action-btn-delete" on:click={() => showDeleteConfirmation = true} on:mouseenter={() => hoveredAction = 'delete'} on:mouseleave={() => hoveredAction = null}>
+                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                    <span class="action-label-delete font-semibold tracking-[0.33px] visible">Delete ({selectedGuestsNotSent.size})</span>
+                                </button>
+                            {/if}
+                            
+                            <button class="action-btn-db ml-2 hover:scale-101" on:click={() => showAddGuestModal = true} on:mouseenter={() => hoveredAction = 'add'} on:mouseleave={() => hoveredAction = null}>
+                                <span class="action-label-db tracking-[0.33px] font-semibold">Add a Guest</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" 
+                                        checked={selectedGuestsNotSent.size === guestsNotSent.length && guestsNotSent.length > 0}
+                                        on:change={selectAllNotSentGuests}
+                                        style="width:24px; height:24px;">
+                                </th>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th>Invite Sent</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        
+                        <tbody>
+                             {#if paginatedGuestsNotSent.length > 0}
+                            {#each paginatedGuestsNotSent as guest}
+                               <!-- <tr class="clickable-row" on:click={(e) => handleGuestRowClick(guest, e)}> -->
+                                 <tr>
+                                    <td>
+                                        <input type="checkbox"
+                                            checked={selectedGuestsNotSent.has(guest.guest_id)}
+                                            on:change={() => toggleNotSentGuestSelection(guest.guest_id)}
+                                            style="width:24px; height:24px;">
+                                    </td>
+                                    <td>
+                                        <div class="name-cell" style="font-weight: 500;">
+                                            {guest.full_name || 'N/A'}
+                                        </div>
+                                        {#if guest.email}
+                                            <div style="font-size: 12px; color: #737373;">{guest.email}</div>
+                                        {/if}
+                                    </td>
+                                    <td>{guest.phone || '-'}</td>
+                                    <td><span class="badge badge-secondary">Not Sent</span></td>
+                                    <td>
+                                        {#if guest.phone}
                                             <button 
-                                                class="action-btn send-btn" 
-                                                style="height: 28px; background: #25D366; color: white; border: none;"
+                                                class="whatsapp-btn" 
+                                                style=""
                                                 on:click|stopPropagation={() => sendWhatsAppInvite(guest)}
                                                 title="Send WhatsApp Invite">
-                                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                                                <svg width="16px" height="16px" fill="currentColor" viewBox="0 0 24 24">
                                                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.570-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
                                                 </svg>
-                                                <span style="margin-left: 4px; font-size: 12px;">Send Invite</span>
-                                            </button>
-                                        {:else if guest.invite_sent}
-                                            <button 
-                                                class="action-btn sent-btn" 
-                                                style="height: 28px; background: #10b981; color: white; border: none;" 
-                                                disabled
-                                                title="Invite Already Sent">
-                                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                                                </svg>
-                                                <span style="margin-left: 4px; font-size: 12px;">Sent</span>
+                                                <span class="whatsapp-btn-label">Send</span>
                                             </button>
                                         {:else}
                                             <button 
@@ -3286,788 +3611,307 @@ onMount(async () => {
                                             </button>
                                         {/if}
                                     </td>
-
                                 </tr>
                             {/each}
-
-                            {#if filteredGuests.length === 0}
+                            
+                            {#if guestsNotSent.length === 0}
                                 <tr>
-                                    <td colspan="8" style="text-align: center; padding: 48px; color: #737373;">
-                                        {searchTerm ? 'No guests found matching your search.' : 'No guests found.'}
+                                    <td colspan="5" style="text-align: center; padding: 48px; color: #737373;">
+                                        {searchTermNotSent ? 'No guests found matching your search.' : 'All guests have been sent invites!'}
                                     </td>
                                 </tr>
                             {/if}
+                            {:else}
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 48px; color: #737373;">
+                                No guests found matching your search.
+                                </td>
+                            </tr>
+                            {/if}
+      
                         </tbody>
                     </table>
                     
                     <div class="pagination">
-                        <button on:click={() => goToGuestPage(guestPage - 1)} disabled={guestPage === 1}>Prev</button>
-                        {#each Array(totalGuestPages) as _, index}
+                        <button on:click={() => goToNotSentGuestPage(guestPage - 1)} disabled={guestPage === 1}>Prev</button>
+                        {#each Array(totalNotSentPages) as _, index}
                             <button 
                                 class:active={guestPage === index + 1}
-                                on:click={() => goToGuestPage(index + 1)}>
+                                on:click={() => goToNotSentGuestPage(index + 1)}>
                                 {index + 1}
                             </button>
                         {/each}
-                        <button on:click={() => goToGuestPage(guestPage + 1)} disabled={guestPage === totalGuestPages}>Next</button>
+                        <button on:click={() => goToNotSentGuestPage(guestPage + 1)} disabled={guestPage === totalNotSentPages}>Next</button>
                     </div>
                 </section>
-
-                <!-- Add Guest Modal -->
-    {#if showAddGuestModal}
-        <div class="modal-overlay" on:click={() => showAddGuestModal = false}>
-            <div class="modal-content" on:click|stopPropagation>
-                <div class="modal-header">
-                    <h3 class="modal-title">Add New Guest</h3>
-                    <button class="modal-close" on:click={() => showAddGuestModal = false}>
-                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-                
-                <form on:submit|preventDefault={addGuest}>
-                    <div class="form-group">
-                        <label class="form-label">Full Name *</label>
-                        <input type="text" class="form-input" bind:value={newGuest.full_name} required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Phone Number *</label>
-                        <input type="tel" class="form-input" bind:value={newGuest.phone} required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" class="form-input" bind:value={newGuest.email}>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Number of Guests</label>
-                        <input type="number" class="form-input" bind:value={newGuest.guest_count} min="1">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Dietary Restrictions</label>
-                        <input type="text" class="form-input" bind:value={newGuest.dietary_restriction}>
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" on:click={() => showAddGuestModal = false}>
-                            Cancel
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            Add Guest
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    {/if}
-
-
-<!-- Gift Management Section for Dashboard -->
-<section class="table-container">
-    <h2 class="section-title mx-3 my-3">Manage Your Gifts</h2>
-    <div class="section-header">
-        <div class="search-container">
-            <input type="text" class="search-input" placeholder="Search gifts..." bind:value={giftSearchTerm}>
-            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-        </div>
-        
-        <div class="table-actions">
-            <button class="action-btn" on:mouseenter={() => hoveredAction = 'sortGifts'} on:mouseleave={() => hoveredAction = null}>
-                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
-                </svg>
-                <span class="action-label">Sort</span>
-            </button>
-            <button class="action-btn" on:click={refreshData} on:mouseenter={() => hoveredAction = 'refreshGifts'} on:mouseleave={() => hoveredAction = null}>
-                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
-                <span class="action-label">Refresh</span>
-            </button>
-            
-            <!-- SIMPLE DELETE BUTTON - shows when gift groups are selected -->
-            {#if selectedGiftGroups.size > 0}
-                <button class="action-btn-delete" on:click={() => showDeleteGiftsConfirmation = true} on:mouseenter={() => hoveredAction = 'deleteGifts'} on:mouseleave={() => hoveredAction = null}>
-                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                    </svg>
-                    <span class="action-label-delete font-semibold tracking-[0.33px] visible">Delete ({selectedGiftGroups.size})</span>
-                </button>
-            {/if}
-            
-            <button class="action-btn-db ml-2" on:click={openAddGiftModal}>
-    <span class="action-label-db tracking-[0.33px] font-semibold">Add Gift</span>
-</button>
-        </div>
-    </div>
-
-    <div class="tabs-container">
-        <button class="tab-btn" class:active={giftViewMode === 'received'} on:click={() => giftViewMode = 'received'}>
-            Gifts Received
-        </button>
-        <button class="tab-btn" class:active={giftViewMode === 'given'} on:click={() => giftViewMode = 'given'}>
-            Souvenirs Given
-        </button>
-    </div>
-
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th style="width: 40px;">
-                    <input type="checkbox" 
-                        checked={selectedGiftGroups.size === filteredGifts.length && filteredGifts.length > 0}
-                        on:change={selectAllGiftGroups}
-                        style="width:22px; height:22px;">
-                </th>
-                <th>Name</th>
-                {#if giftViewMode === 'received'}
-                    <th>Type of Gift</th>
-                    <th>Description</th>
-                    <th>Quantity</th>
-                    <th>Value</th>
-                    <th>Action</th>
-                {:else}
-                    <th>Quantity</th>
-                    <th>Action</th>
-                {/if}
-            </tr>
-        </thead>
-        <tbody>
-            {#each paginatedGift as guestGiftGroup}
-                <tr class="clickable-row" on:click={(e) => handleGiftRowClick(guestGiftGroup, e)}>
-                    <td>
-                        <input type="checkbox"
-                            checked={selectedGiftGroups.has(guestGiftGroup.guest?.guest_id || 'anonymous')}
-                            on:change={() => toggleGiftGroupSelection(guestGiftGroup.guest?.guest_id || 'anonymous')}
-                            on:click|stopPropagation
-                            style="width:22px; height:22px;">
-                    </td>
-                    
-                    <td style="font-weight: 500;">{guestGiftGroup.guest?.full_name || 'Anonymous'}</td>
-                    
-                    {#if giftViewMode === 'received'}
-                        <td>
-                            {#each guestGiftGroup.gifts as gift, index}
-                                <span class="badge badge-info">{gift.gift_type || gift.name}</span>
-                                {#if index < guestGiftGroup.gifts.length - 1}<br/>{/if}
-                            {/each}
-                        </td>
-                        <td>
-                            {#each guestGiftGroup.gifts as gift, index}
-                                {gift.description || '-'}
-                                {#if index < guestGiftGroup.gifts.length - 1}<br/>{/if}
-                            {/each}
-                        </td>
-                        <td>{guestGiftGroup.gifts.reduce((sum, g) => sum + (g.quantity || 1), 0)}</td>
-                        <td>
-                            {#if guestGiftGroup.gifts.some(g => g.value)}
-                                ${guestGiftGroup.gifts.reduce((sum, g) => sum + (g.value || 0), 0)}
-                            {:else}
-                                -
-                            {/if}
-                        </td>
-
-                        <td>
-    {#if guestGiftGroup.guest?.phone}
-        <button 
-            class="action-btn send-btn" 
-            style="height: 28px; background: #25D366; color: white; border: none; margin-right: 8px;"
-            on:click|stopPropagation={() => sendThankYouMessage(guestGiftGroup)}
-            title="Send WhatsApp Thank You">
-            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.570-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
-            </svg>
-            <span style="margin-left: 4px; font-size: 12px;">Thank You</span>
-        </button>
-    {/if}
-    
-    {#if guestGiftGroup.gifts.length === 1}
-        <button class="action-btn" style="height: 28px;" on:click|stopPropagation={() => editGift(guestGiftGroup.gifts[0])}>
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-            </svg>
-        </button>
-    {:else}
-        <button class="action-btn" style="height: 28px;" on:click|stopPropagation={() => editGiftFromGroup(guestGiftGroup)} title="Edit gifts (multiple)">
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-            </svg>
-            <span style="font-size: 10px; margin-left: 2px;">({guestGiftGroup.gifts.length})</span>
-        </button>
-    {/if}
-</td>
+{/if}
                
-      
-                    {:else}
-                        <td>{guestGiftGroup.gifts.reduce((sum, g) => sum + (g.quantity || 1), 0)}</td>
-                        <td>
-                            {#if guestGiftGroup.gifts.length === 1}
-                                <button class="action-btn" style="height: 28px;" on:click|stopPropagation={() => editGift(guestGiftGroup.gifts[0])}>
-                                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                <!-- Add Guest Modal -->
+                {#if showAddGuestModal}
+                    <div class="modal-overlay" on:click={() => showAddGuestModal = false}>
+                        <div class="modal-content" on:click|stopPropagation>
+                            <div class="modal-header">
+                                <h3 class="modal-title">Add New Guest</h3>
+                                <button class="modal-close" on:click={() => showAddGuestModal = false}>
+                                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                     </svg>
                                 </button>
-                            {:else}
-                                <button class="action-btn" style="height: 28px;" on:click|stopPropagation={() => editGiftFromGroup(guestGiftGroup)} title="Edit souvenirs (multiple)">
-                                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
-                                    <span style="font-size: 10px; margin-left: 2px;">({guestGiftGroup.gifts.length})</span>
-                                </button>
-                            {/if}
+                            </div>
                             
-                            <button class="action-btn" style="height: 28px;" on:click|stopPropagation={() => deleteGuestGifts(guestGiftGroup)}>
-                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
-                            </button>
-                        </td>
-                    {/if}
-                </tr>
-            {/each}
-            
-            {#if filteredGifts.length === 0}
-                <tr>
-                    <td colspan="{giftViewMode === 'received' ? 7 : 4}" style="text-align: center; padding: 48px; color: #737373;">
-                        No {giftViewMode === 'received' ? 'gifts received' : 'souvenirs given'} yet.
-                    </td>
-                </tr>
-            {/if}
-        </tbody>
-    </table>
-    
+                            <form on:submit|preventDefault={addGuest}>
+                                <div class="form-group">
+                                    <label class="form-label">Full Name *</label>
+                                    <input type="text" class="form-input" bind:value={newGuest.full_name} required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Phone Number *</label>
+                                    <input type="tel" class="form-input" bind:value={newGuest.phone} required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" class="form-input" bind:value={newGuest.email}>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Number of Guests</label>
+                                    <input type="number" class="form-input" bind:value={newGuest.guest_count} min="1">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Dietary Restrictions</label>
+                                    <input type="text" class="form-input" bind:value={newGuest.dietary_restriction}>
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button type="button" class="btn btn-secondary" on:click={() => showAddGuestModal = false}>
+                                        Cancel
+                                    </button>
+                                    <button type="submit" class="btn btn-primary">
+                                        Add Guest
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                {/if}
 
+                <!-- Delete Not Sent Guests Confirmation Modal -->
+                {#if showDeleteConfirmation}
+                    <div class="modal-overlay" on:click={() => showDeleteConfirmation = false}>
+                        <div class="modal-content" on:click|stopPropagation>
+                            <div class="modal-header">
+                                <h3 class="modal-title">Confirm Deletion</h3>
+                                <button class="modal-close" on:click={() => showDeleteConfirmation = false}>
+                                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <p style="margin-bottom: 24px; color: #525252;">
+                                Are you sure you want to delete {selectedGuestsNotSent.size} guest{selectedGuestsNotSent.size > 1 ? 's' : ''} from the "Invites Not Sent" list? This action cannot be undone.
+                            </p>
+                            
+                            <div class="form-actions">
+                                <button class="btn btn-secondary" on:click={() => showDeleteConfirmation = false} disabled={isDeleting}>
+                                    Cancel
+                                </button>
+                                <button class="btn btn-primary !bg-red-600" on:click={deleteSelectedNotSentGuests} disabled={isDeleting}>
+                                    {isDeleting ? 'Deleting...' : 'Delete'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
 
+                <!-- Delete Sent Guests Confirmation Modal -->
+                {#if showDeleteSentConfirmation}
+                    <div class="modal-overlay" on:click={() => showDeleteSentConfirmation = false}>
+                        <div class="modal-content" on:click|stopPropagation>
+                            <div class="modal-header">
+                                <h3 class="modal-title">Confirm Deletion</h3>
+                                <button class="modal-close" on:click={() => showDeleteSentConfirmation = false}>
+                                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <p style="margin-bottom: 24px; color: #525252;">
+                                Are you sure you want to delete {selectedGuestsSent.size} guest{selectedGuestsSent.size > 1 ? 's' : ''} from the "Invites Sent" list? This action cannot be undone.
+                            </p>
+                            
+                            <div class="form-actions">
+                                <button class="btn btn-secondary" on:click={() => showDeleteSentConfirmation = false} disabled={isDeleting}>
+                                    Cancel
+                                </button>
+                                <button class="btn btn-primary !bg-red-600" on:click={deleteSelectedSentGuests} disabled={isDeleting}>
+                                    {isDeleting ? 'Deleting...' : 'Delete'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
 
-    <div class="pagination">
-        <button on:click={() => goToGiftPage(giftPage - 1)} disabled={giftPage === 1}>Prev</button>
-        {#each Array(totalGiftPages) as _, index}
-            <button 
-                class:active={giftPage === index + 1}
-                on:click={() => goToGiftPage(index + 1)}>
-                {index + 1}
-            </button>
-        {/each}
-        <button on:click={() => goToGiftPage(giftPage + 1)} disabled={giftPage === totalGiftPages}>Next</button>
-    </div>
-</section>
+                <!-- Mark as Not Sent Confirmation Modal -->
+                {#if showMarkNotSentConfirmation}
+                    <div class="modal-overlay" on:click={() => showMarkNotSentConfirmation = false}>
+                        <div class="modal-content" on:click|stopPropagation>
+                            <div class="modal-header">
+                                <h3 class="modal-title">Mark as Not Sent</h3>
+                                <button class="modal-close" on:click={() => showMarkNotSentConfirmation = false}>
+                                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <p style="margin-bottom: 24px; color: #525252;">
+                                Are you sure you want to mark {selectedGuestsSent.size} guest{selectedGuestsSent.size > 1 ? 's' : ''} as not sent? They will be moved back to the "Invites Not Sent" table.
+                            </p>
+                            
+                            <div class="form-actions">
+                                <button class="btn btn-secondary" on:click={() => showMarkNotSentConfirmation = false} disabled={isMarkingNotSent}>
+                                    Cancel
+                                </button>
+                                <button class="btn btn-primary" style="background: #f59e0b;" on:click={markSelectedAsNotSent} disabled={isMarkingNotSent}>
+                                    {isMarkingNotSent ? 'Updating...' : 'Mark as Not Sent'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
 
-
- {#if showMessagePreviewModal}
-    <div class="modal-overlay" on:click={closeMessagePreviewModal}>
-        <div class="modal-content" on:click|stopPropagation style="max-width: 650px;">
-            <div class="modal-header">
-                <h3 class="modal-title">
-                    Preview & Edit {messageType === 'invite' ? 'Invite' : 'Thank You'} Message
-                </h3>
-                <button class="modal-close" on:click={closeMessagePreviewModal}>
-                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            
-            <!-- Recipient Info -->
-            <div class="recipient-info">
-                <div class="recipient-header">
-                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M16 4h2a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2m4-2a2 2 0 00-2 2v2a2 2 0 002 2h4a2 2 0 002-2V4a2 2 0 00-2-2h-4z"/>
-                    </svg>
-                    <span class="recipient-label">Sending to:</span>
-                </div>
-                <div class="recipient-details">
-                    <div class="recipient-name">{selectedGuestForPreview?.full_name}</div>
-                    <div class="recipient-phone">{selectedGuestForPreview?.phone}</div>
-                    {#if selectedGuestForPreview?.email}
-                        <div class="recipient-email">{selectedGuestForPreview.email}</div>
-                    {/if}
-                </div>
-            </div>
-            
-            <!-- Message Editor -->
-            <div class="form-group">
-                <label class="form-label">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-right: 6px;">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                    </svg>
-                    Your Message:
-                </label>
-                <div class="message-editor">
-                    <textarea 
-                        class="message-textarea" 
-                        bind:value={previewMessage}
-                        rows="12"
-                        placeholder="Type your message here..."
-                        style="width: 100%; min-height: 280px; resize: vertical; font-family: 'DM Sans', sans-serif; font-size: 14px; line-height: 1.5; padding: 16px; border: 1px solid #d4d4d4; border-radius: 8px; background: white;">
-                    </textarea>
-                </div>
-                <div class="character-count">
-                    {previewMessage.length} characters
-                </div>
-            </div>
-            
-            <!-- Action Buttons -->
-            <div class="form-actions">
-                <button class="btn btn-secondary" on:click={closeMessagePreviewModal}>
-                    Cancel
-                </button>
-                <button class="btn btn-primary" on:click={sendPreviewedMessage} style="background: #25D366; border-color: #25D366;">
-                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" style="margin-right: 8px;">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.570-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
-                    </svg>
-                    Send via WhatsApp
-                </button>   
-            </div>
-        </div>
-    </div>
-{/if}
-
-<!-- Updated Add Gift Modal -->
-{#if showAddGiftModal}
-    <div class="modal-overlay" on:click={() => showAddGiftModal = false}>
-        <div class="modal-content" on:click|stopPropagation>
-            <div class="modal-header">
-                <h3 class="modal-title">Add {giftViewMode === 'received' ? 'Gift Received' : 'Souvenir Given'}</h3>
-                <button class="modal-close" on:click={() => showAddGiftModal = false}>
-                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            
-            <form on:submit|preventDefault={addGift}>
-                <div class="form-group">
-                    <label class="form-label">Search Guest</label>
-                    
-                    <!-- Selected Guest Display -->
-                    {#if selectedGuestForGift}
-                        <div class="selected-guest-display">
-                            <div class="selected-guest-info">
-                                <div class="selected-guest-name">{selectedGuestForGift.full_name}</div>
-                                <div class="selected-guest-details">
-                                    {#if selectedGuestForGift.phone}
-                                        <span>{selectedGuestForGift.phone}</span>
-                                    {/if}
-                                    {#if selectedGuestForGift.email}
-                                        <span>{selectedGuestForGift.email}</span>
+                <!-- Message Preview Modal -->
+                {#if showMessagePreviewModal}
+                    <div class="modal-overlay" on:click={closeMessagePreviewModal}>
+                        <div class="modal-content" on:click|stopPropagation style="max-width: 650px;">
+                            <div class="modal-header">
+                                <h3 class="modal-title">
+                                    Preview & Edit {messageType === 'invite' ? 'Invite' : 'Thank You'} Message
+                                </h3>
+                                <button class="modal-close" on:click={closeMessagePreviewModal}>
+                                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Recipient Info -->
+                            <div class="recipient-info">
+                                <div class="recipient-header">
+                                    <!-- <svg width="28px" height="28px" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M16 4h2a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2m4-2a2 2 0 00-2 2v2a2 2 0 002 2h4a2 2 0 002-2V4a2 2 0 00-2-2h-4z"/>
+                                    </svg> -->
+                                    <span class="recipient-label">Sending to:</span>
+                                </div>
+                                <div class="recipient-details">
+                                    <div class="recipient-name">{selectedGuestForPreview?.full_name}</div>
+                                    <div class="recipient-phone">{selectedGuestForPreview?.phone}</div>
+                                    {#if selectedGuestForPreview?.email}
+                                        <div class="recipient-email">{selectedGuestForPreview.email}</div>
                                     {/if}
                                 </div>
                             </div>
-                            <button type="button" class="clear-selection-btn" on:click={clearGuestSelection}>
-                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                </svg>
-                            </button>
-                        </div>
-                    {:else}
-                        <!-- Guest Search Input -->
-                        <div class="guest-search-container">
-                            <input 
-                                type="text" 
-                                class="form-input guest-search-input" 
-                                bind:value={guestSearchTerm}
-                                on:input={handleGuestSearch}
-                                on:focus={() => showGuestSearchResults = true}
-                                placeholder="Search by name, phone, or email..."
-                                autocomplete="off">
                             
-                            <!-- Search Results Dropdown -->
-                            {#if showGuestSearchResults && guestSearchTerm.length > 0}
-                                <div class="guest-search-results">
-                                    {#each filteredGuestsForSearch as guest}
-                                        <button 
-                                            type="button" 
-                                            class="guest-search-result" 
-                                            on:click={() => selectGuestForGift(guest)}>
-                                            <div class="guest-result-name">{guest.full_name}</div>
-                                            <div class="guest-result-details">
-                                                {#if guest.phone}
-                                                    <span class="guest-result-phone">{guest.phone}</span>
-                                                {/if}
-                                                {#if guest.email}
-                                                    <span class="guest-result-email">{guest.email}</span>
-                                                {/if}
-                                            </div>
-                                        </button>
-                                    {/each}
-                                    
-                                    {#if filteredGuestsForSearch.length === 0}
-                                        <div class="no-results">No guests found</div>
-                                    {/if}
-                                </div>
-                            {/if}
-                        </div>
-                    {/if}
-                </div>
-                
-                {#if giftViewMode === 'received'}
-                    <div class="form-group">
-                        <label class="form-label">Gift Type *</label>
-                        <select class="form-input" bind:value={newGift.gift_type} required>
-                            <option value="">Select type...</option>
-                            <option value="Goods">Goods</option>
-                            <option value="Angpao">Angpao</option>
-                            <option value="Bank Transfer">Bank Transfer</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Description</label>
-                        <input type="text" class="form-input" bind:value={newGift.description} placeholder="e.g., Dyson Hairdryer, Cash, etc.">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Value (Optional)</label>
-                        <input type="number" class="form-input" bind:value={newGift.value} min="0" step="0.01" placeholder="">
-                    </div>
-                {:else}
-                    <div class="form-group">
-                        <label class="form-label">Souvenir Name</label>
-                        <input type="text" class="form-input" bind:value={newGift.name} placeholder="Souvenir">
-                    </div>
-                {/if}
-                
-                <div class="form-group">
-                    <label class="form-label">Quantity</label>
-                    <input type="number" class="form-input" bind:value={newGift.quantity} min="1">
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" on:click={() => showAddGiftModal = false}>
-                        Cancel
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        Add {giftViewMode === 'received' ? 'Gift' : 'Souvenir'}
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-{/if}
-
-<!-- Edit Gift Modal -->
-{#if showEditGiftModal}
-    <div class="modal-overlay" on:click={() => showEditGiftModal = false}>
-        <div class="modal-content" on:click|stopPropagation>
-            <div class="modal-header">
-                <h3 class="modal-title">Edit {editingGift?.type === 'received' ? 'Gift' : 'Souvenir'}</h3>
-                <button class="modal-close" on:click={() => showEditGiftModal = false}>
-                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            
-            <form on:submit|preventDefault={updateGift}>
-                <div class="form-group">
-                    <label class="form-label">Guest</label>
-                    <select class="form-input" bind:value={editingGift.guest_id}>
-                        <option value="">Select a guest...</option>
-                        {#each guests as guest}
-                            <option value={guest.guest_id}>{guest.full_name}</option>
-                        {/each}
-                    </select>
-                </div>
-                
-                {#if editingGift?.type === 'received'}
-                    <div class="form-group">
-                        <label class="form-label">Gift Type *</label>
-                        <select class="form-input" bind:value={editingGift.gift_type} required>
-                            <option value="Goods">Goods</option>
-                            <option value="Angpao">Angpao</option>
-                            <option value="Bank Transfer">Bank Transfer</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Description</label>
-                        <input type="text" class="form-input" bind:value={editingGift.description}>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Value</label>
-                        <input type="number" class="form-input" bind:value={editingGift.value} min="0" step="0.01">
-                    </div>
-                {:else}
-                    <div class="form-group">
-                        <label class="form-label">Souvenir Name</label>
-                        <input type="text" class="form-input" bind:value={editingGift.name}>
-                    </div>
-                {/if}
-                
-                <div class="form-group">
-                    <label class="form-label">Quantity</label>
-                    <input type="number" class="form-input" bind:value={editingGift.quantity} min="1">
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" on:click={() => showEditGiftModal = false}>
-                        Cancel
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        Update {editingGift?.type === 'received' ? 'Gift' : 'Souvenir'}
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-{/if}
-
-
-<!--Delete Gifts Confirmation Modal-->
-{#if showDeleteGiftsConfirmation}
-    <div class="modal-overlay" on:click={() => showDeleteGiftsConfirmation = false}>
-        <div class="modal-content" on:click|stopPropagation>
-            <div class="modal-header">
-                <h3 class="modal-title">Delete Selected Gift Groups</h3>
-                <button class="modal-close" on:click={() => showDeleteGiftsConfirmation = false}>
-                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            
-            <p style="margin-bottom: 24px; color: #525252;">
-                Are you sure you want to delete gifts from {selectedGiftGroups.size} selected guest group(s)? This action cannot be undone.
-            </p>
-            
-            <div class="form-actions">
-                <button class="btn btn-secondary" on:click={() => showDeleteGiftsConfirmation = false} disabled={isDeletingGifts}>
-                    Cancel
-                </button>
-                <button class="btn btn-primary" style="background: #ef4444;" on:click={deleteSelectedGiftGroups} disabled={isDeletingGifts}>
-                    {isDeletingGifts ? 'Deleting...' : 'Delete Gift Groups'}
-                </button>
-            </div>
-        </div>
-    </div>
-{/if}
-
-<!-- Message Template Settings Modal -->
-{#if showSettingsModal}
-    <div class="modal-overlay" on:click={closeSettingsModal}>
-        <div class="settings-modal-content" on:click|stopPropagation>
-            <div class="modal-header">
-                <h3 class="modal-title">Message Template Settings</h3>
-                <button class="modal-close" on:click={closeSettingsModal}>
-                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            
-            <!-- Tab Navigation -->
-            <div class="settings-tabs">
-                <button 
-                    class="settings-tab-btn" 
-                    class:active={settingsActiveTab === 'invite'}
-                    on:click={() => settingsActiveTab = 'invite'}>
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                    </svg>
-                    Invite Template
-                </button>
-                <button 
-                    class="settings-tab-btn" 
-                    class:active={settingsActiveTab === 'thankYou'}
-                    on:click={() => settingsActiveTab = 'thankYou'}>
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-                    </svg>
-                    Thank You Template
-                </button>
-            </div>
-            
-            <!-- Template Editor -->
-            <div class="settings-content">
-                <div class="template-editor-container">
-                    <!-- Variables Helper -->
-                    <div class="variables-section">
-                        <h4 class="variables-title">Available Variables</h4>
-                        <div class="variables-grid">
-                            <button class="variable-btn" on:click={() => insertVariable('{guest_name}')}>
-                                <span class="variable-name">{guest_name}</span>
-                                <span class="variable-desc">Guest's full name</span>
-                            </button>
-                            <button class="variable-btn" on:click={() => insertVariable('{client_name}')}>
-                                <span class="variable-name">{client_name}</span>
-                                <span class="variable-desc">Your name/couple name</span>
-                            </button>
-                            <button class="variable-btn" on:click={() => insertVariable('{event_date}')}>
-                                <span class="variable-name">{event_date}</span>
-                                <span class="variable-desc">Wedding date</span>
-                            </button>
-                            <button class="variable-btn" on:click={() => insertVariable('{location}')}>
-                                <span class="variable-name">{location}</span>
-                                <span class="variable-desc">Wedding location</span>
-                            </button>
-                            {#if settingsActiveTab === 'invite'}
-                                <button class="variable-btn" on:click={() => insertVariable('{rsvp_deadline}')}>
-                                    <span class="variable-name">{rsvp_deadline}</span>
-                                    <span class="variable-desc">RSVP deadline</span>
-                                </button>
-                                <button class="variable-btn" on:click={() => insertVariable('{invite_url}')}>
-                                    <span class="variable-name">{invite_url}</span>
-                                    <span class="variable-desc">Personal invite link</span>
-                                </button>
-                            {:else}
-                                <button class="variable-btn" on:click={() => insertVariable('{gift_description}')}>
-                                    <span class="variable-name">{gift_description}</span>
-                                    <span class="variable-desc">Gift details</span>
-                                </button>
-                            {/if}
-                        </div>
-                    </div>
-                    
-                    <!-- Template Editor -->
-                    <div class="template-editor">
-                        <div class="editor-header">
-                            <h4 class="editor-title">
-                                {settingsActiveTab === 'invite' ? 'Invite Message Template' : 'Thank You Message Template'}
-                            </h4>
-                            <button class="reset-btn" on:click={resetToDefault}>
-                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                </svg>
-                                Reset to Default
-                            </button>
-                        </div>
-                        
-                        {#if settingsActiveTab === 'invite'}
-                            <textarea 
-                                id="template-invite"
-                                class="template-textarea" 
-                                bind:value={tempMessageTemplates.invite}
-                                rows="15"
-                                placeholder="Enter your invite message template here...">
-                            </textarea>
-                        {:else}
-                            <textarea 
-                                id="template-thankYou"
-                                class="template-textarea" 
-                                bind:value={tempMessageTemplates.thankYou}
-                                rows="15"
-                                placeholder="Enter your thank you message template here...">
-                            </textarea>
-                        {/if}
-                        
-                        <div class="template-info">
-                            <div class="character-count">
-                                {settingsActiveTab === 'invite' ? tempMessageTemplates.invite.length : tempMessageTemplates.thankYou.length} characters
-                            </div>
-                            <div class="template-tip">
-                                💡 Click on variables above to insert them at your cursor position
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Action Buttons -->
-            <div class="settings-actions">
-                <button class="btn btn-secondary" on:click={closeSettingsModal} disabled={isSavingTemplates}>
-                    Cancel
-                </button>
-                <button class="btn btn-primary" on:click={saveMessageTemplates} disabled={isSavingTemplates}>
-                    {isSavingTemplates ? 'Saving...' : 'Save Templates'}
-                </button>
-            </div>
-        </div>
-    </div>
-{/if}
-
-   <!-- Delete Confirmation Modal -->
-    {#if showDeleteConfirmation}
-        <div class="modal-overlay" on:click={() => showDeleteConfirmation = false}>
-            <div class="modal-content" on:click|stopPropagation>
-                <div class="modal-header">
-                    <h3 class="modal-title">Confirm Deletion</h3>
-                    <button class="modal-close" on:click={() => showDeleteConfirmation = false}>
-                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-                
-                <p style="margin-bottom: 24px; color: #525252;">
-                    Are you sure you want to delete {selectedGuests.size} guest{selectedGuests.size > 1 ? 's' : ''}? This action cannot be undone.
-                </p>
-                
-                <div class="form-actions">
-                    <button class="btn btn-secondary" on:click={() => showDeleteConfirmation = false} disabled={isDeleting}>
-                        Cancel
-                    </button>
-                    <button class="btn btn-primary !bg-red-600" on:click={deleteSelectedGuests} disabled={isDeleting}>
-                        {isDeleting ? 'Deleting...' : 'Delete'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    {/if}
-
-
-
-    <!-- Metrics Settings Modal -->
-    {#if showMetricsSettings}
-        <div class="modal-overlay" on:click={() => showMetricsSettings = false}>
-            <div class="modal-content" on:click|stopPropagation>
-                <div class="modal-header">
-                    <h3 class="modal-title">Customize Metrics</h3>
-                    <button class="modal-close" on:click={() => showMetricsSettings = false}>
-                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-                
-                <p style="margin-bottom: 20px; color: #525252; font-size: 14px;">
-                    Select which metrics to display on your dashboard
-                </p>
-                
-                <div style="display: grid; gap: 12px;">
-                     {#each Object.keys(availableMetrics) as metricKey}
-                            <div class="metric-setting-row">
-                                <label>
-                                    <input
-                                        type="checkbox"
-                                        checked={metricKey in selectedMetrics}
-                                        on:change={() => toggleMetric(metricKey)}
-                                    />
-                                    {availableMetrics[metricKey].label}
+                            <!-- Message Editor -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                   
+                                    Your Message:
                                 </label>
-
-                                {#if metricKey in selectedMetrics}
-                                    <select
-                                        bind:value={selectedMetrics[metricKey].mode}
-                                    >
-                                        <option value="count">Count</option>
-                                        <option value="percent">Percent</option>
-                                    </select>
-                                {/if}
+                                <div class="message-editor">
+                                    <textarea 
+                                        class="message-textarea" 
+                                        bind:value={previewMessage}
+                                        rows="12"
+                                        placeholder="Type your message here..."
+                                        >
+                                    </textarea>
+                                </div>
+                                <div class="message-editor-footer">
+                                <div class="character-count">
+                                    {previewMessage.length} characters
+                                </div>
+                                <div class="change-globaltemp">
+                                    <a href="">Click to change your global template here</a>
+                                </div>
                             </div>
-                        {/each}
+                            </div>
+                            
+                            <!-- Action Buttons -->
+                            <div class="form-actions">
+                                <button class="btn btn-secondary" on:click={closeMessagePreviewModal}>
+                                    Cancel
+                                </button>
+                                <button class="btn btn-primary" on:click={sendPreviewedMessage} style="background: #25D366; border-color: #25D366;">
+                                    <!-- <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" style="margin-right: 8px;">
+                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.570-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+                                    </svg> -->
+                                    Send via WhatsApp
+                                </button>   
+                            </div>
+                        </div>
                     </div>
-                
-                <div class="form-actions" style="margin-top: 24px;">
-                    <button class="btn btn-secondary" on:click={() => showMetricsSettings = false}>
-                        Cancel
-                    </button>
-                    <button class="btn btn-primary" on:click={saveMetricsPreferences} disabled={isSavingMetrics}>
-                        {isSavingMetrics ? 'Saving...' : 'Save Preferences'}
-                    </button>
-                </div>
+                {/if}
+
+                <!-- Metrics Settings Modal -->
+                {#if showMetricsSettings}
+                    <div class="modal-overlay" on:click={() => showMetricsSettings = false}>
+                        <div class="modal-content" on:click|stopPropagation>
+                            <div class="modal-header">
+                                <h3 class="modal-title">Customize Metrics</h3>
+                                <button class="modal-close" on:click={() => showMetricsSettings = false}>
+                                    <svg width="24px" height="24px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <p style="margin-bottom: 20px; color: #525252; font-size: 14px;">
+                                Select which metrics to display on your dashboard
+                            </p>
+                            
+                            <div style="display: grid; gap: 12px;">
+                                {#each Object.keys(availableMetrics) as metricKey}
+                                    <div class="metric-setting-row">
+                                        <label>
+                                            <input
+                                                type="checkbox"
+                                                checked={metricKey in selectedMetrics}
+                                                on:change={() => toggleMetric(metricKey)}
+                                            />
+                                            {availableMetrics[metricKey].label}
+                                        </label>
+
+                                        {#if metricKey in selectedMetrics}
+                                            <select
+                                                bind:value={selectedMetrics[metricKey].mode}
+                                            >
+                                                <option value="count">Count</option>
+                                                <option value="percent">Percent</option>
+                                            </select>
+                                        {/if}
+                                    </div>
+                                {/each}
+                            </div>
+                            
+                            <div class="form-actions" style="margin-top: 24px;">
+                                <button class="btn btn-secondary" on:click={() => showMetricsSettings = false}>
+                                    Cancel
+                                </button>
+                                <button class="btn btn-primary" on:click={saveMetricsPreferences} disabled={isSavingMetrics}>
+                                    {isSavingMetrics ? 'Saving...' : 'Save Preferences'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
             </div>
-        </div>
-    {/if}
-  </div>
-  
-    </main>
-    
-</div>
+        </main>
+    </div>
 {/if}
+
