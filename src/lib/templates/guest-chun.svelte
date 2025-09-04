@@ -1226,12 +1226,12 @@ function handleVisibilityChange() {
                 </p>
               </div>
 
-              <button
+              <!-- <button
                 on:click={unlockScrollAndScrollDown}
                 class="font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition text-xs sm:text-sm"
               >
                 JOIN THE CELEBRATION
-              </button>
+              </button> -->
             </div>
           </div>
           <!--End of Landing-->
