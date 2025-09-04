@@ -1598,7 +1598,8 @@ onMount(async () => {
    GLOBAL STYLES
    ============================================================================ */
 :global(html) {
-   
+    -webkit-font-smoothing: antialiased; 
+    -moz-osx-font-smoothing: grayscale; 
 }
 
 :global(body) {
@@ -1626,8 +1627,8 @@ onMount(async () => {
 }
 
 .dashboard-content {
-    padding: 20px 80px;
-    margin-top:20px;
+    padding: 4rem 6rem;
+    border-bottom:1px solid #ababab;
 }
 
 /* .breadcrumb {
@@ -1782,7 +1783,7 @@ onMount(async () => {
 .nav-item {
     display: flex;
     align-items: center;
-    padding: 1.5rem 2rem;
+    padding: 2rem;
     margin: 10px;
     color: #000000;
     text-decoration: none;
@@ -1911,6 +1912,12 @@ onMount(async () => {
     
 }
 
+.header-buttons {
+    display: flex;
+    gap: 12px; /* Controls spacing between the buttons */
+    align-items: center;
+}
+
 .section-header {
     display: flex;
     justify-content: space-between;
@@ -1920,18 +1927,18 @@ onMount(async () => {
 
 .section-title {
     font-family: 'DM Sans', sans-serif;
-    font-size: 2.75em; /* smaller than before */
+    font-size: 3em;
     font-weight: 500;
-    letter-spacing:0.025em;
+    letter-spacing:0.001em;
     color: #111;
     /* margin: 2rem 0 0 0; */
 }
 
 .section-description {
     font-family: 'DM Sans', sans-serif;
-    font-size:  1.5em;
-    font-weight: 250;
-    letter-spacing:0.02em;
+    font-size: 2em;
+    font-weight: 300;
+    letter-spacing:0.001em;
     color: #444;
     opacity: 0.8;
 }
@@ -1970,9 +1977,9 @@ onMount(async () => {
 }
 
 .metric-card {
-    background: linear-gradient(2200deg, #ABB1EF 0%, #E9EBFF 100%);
+    background: linear-gradient(220deg, #cdd1ff 0%, #c6cbff 100%);
     border-radius: 20px;
-    padding: 2rem 1rem 3rem 2rem;
+    padding: 2rem;
     border: none;
     text-align:left;
     transition: all 0.2s ease-in-out;
@@ -1985,28 +1992,28 @@ onMount(async () => {
 
 .metric-label {
     font-family:'DM Sans',sans-serif;
-    font-size: 1.5em;
-    font-weight:550;
+    font-size: 1.875em;
+    font-weight:500;
     letter-spacing:0.015em;
     color: #000;
-    opacity:80%;
-    margin-bottom: 8px;
+    opacity:70%;
+    
     display:flex;
     align-items:flex-start;
 }
 
 .metric-value {
-    font-size: 4.75em; /* smaller, closer to screenshot */
-    font-weight: 700;
+    font-size: 5.5em; /* smaller, closer to screenshot */
+    font-weight: 600;
     color: #000;
-    line-height: 1.2;
+   
 }
 
-.metric-subtitle {
+/* .metric-subtitle {
     font-size: 12px;
     color: #a3a3a3;
     margin-top: 8px;
-}
+} */
 
 .metrics-toggle-btn {
     width: auto;
@@ -2082,7 +2089,7 @@ onMount(async () => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0;
+    margin-bottom:0;
 }
 
 
@@ -2090,7 +2097,7 @@ onMount(async () => {
 .table-container {
     
     border-radius: 10px;
-    padding: 2rem;
+    padding: 3rem;
     margin-bottom: 24px;
     border: 0.75px solid #ABABAB;
 }
@@ -2110,11 +2117,11 @@ onMount(async () => {
 .data-table th {
     text-align: left;
     padding: 12px;
-    border-bottom: 0.5px solid #d4d4d4;
+    border-bottom: 0.5px solid #bcbcbc;
     font-family:'DM Sans',sans-serif;
-    font-weight: 600;
+    font-weight: 300;
     color: #525252;
-    font-size: 1em;
+    font-size: 1.25em;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -2127,7 +2134,7 @@ onMount(async () => {
 }
 
 .data-table tr:hover td {
-    background: #fafafa;
+    background: #E8E8E8;
 }
 
 .data-table tr.clickable-row {
@@ -2137,23 +2144,32 @@ onMount(async () => {
 }
 
 .data-table tr.clickable-row:hover td {
-    background: #f0f9ff;
+    background: #f1f1f1;
 }
 
 .data-table tr.clickable-row:active td {
-    background: #e0f2fe;
+   background: #f1f1f1;
 }
 
 .name-cell {
     font-family:'DM Sans',sans-serif;
-    font-weight:300;
-    font-size:1em;
+    font-weight:400;
+    font-size:1.25em;
     cursor: pointer;
     transition: color 200ms ease-in-out;
 }
 
+
 .name-cell:hover {
     color: #0369a1;
+}
+
+.phone-cell {
+    font-family:'DM Sans',sans-serif;
+    font-weight:400;
+    font-size:1.25em;
+    cursor: pointer;
+    transition: color 200ms ease-in-out;
 }
 
 /* ============================================================================
@@ -2174,8 +2190,8 @@ onMount(async () => {
 
 .action-label-db {
     color: white;
-    font-size: 14px;
-    font-kerning: 0.1rem;
+    font-size: 1.25em;
+    
 }
 
 .action-btn {
@@ -2222,7 +2238,7 @@ onMount(async () => {
 }
 
 .action-label-delete {
-    font-size: 14px;
+    font-size: 1em;
     white-space: nowrap;
     max-width: 0;
     overflow: hidden;
@@ -2236,13 +2252,13 @@ onMount(async () => {
 }
 
 .action-icon {
-    width: 18px;
-    height: 18px;
+    width: 1.5rem;
+    height:  1.5rem;
     flex-shrink: 0;
 }
 
 .action-label {
-    font-size: 14px;
+    font-size: 1em;
     font-weight: 500;
     white-space: nowrap;
     max-width: 0;
@@ -2256,26 +2272,53 @@ onMount(async () => {
     transition: 200ms ease-in;
 }
 
-.whatsapp-btn{
-    padding: 0.75rem 1.25rem;
-    border-radius:6px;
-    background: #00782e; 
-    color: white; 
+.viewdetails-btn{
+   padding: 0.675rem 1.675rem;
+    border-radius:999px;
+    background: #D9DCFA; 
+    color: black; 
     border: none;
-    font-size: 0.75em;
-    font-weight: 600;
-    letter-spacing: 0.03em;
+    font-family:'DM Sans', sans-serif;
+    font-size: 1em;
+    font-weight: 900;
+    letter-spacing:0.03em;
       display: flex;
     align-items: center;
     cursor: pointer;
     transition: all 300ms ease-in;
-    position: relative;
+   text-transform:uppercase;
+}
+
+.viewdetails-icon{
+    margin-right:1rem;
+}
+
+.whatsapp-btn{
+  
+   padding: 0.675rem 1.675rem;
+    border-radius:999px;
+    background: #D9DCFA; 
+    color: black; 
+    border: none;
+    font-family:'DM Sans', sans-serif;
+    font-size: 1em;
+    font-weight: 900;
+    letter-spacing:0.03em;
+     text-transform:uppercase;
+      display: flex;
+    align-items: center;
+    cursor: pointer;
+    transition: all 300ms ease-in;
+
+  
  
 }
 
 .whatsapp-btn-label{
-   margin-left:10px;
+   margin-left:1rem;
 }
+
+
 
 .whatsapp-btn:hover{
     transform:scale(1.02);
@@ -2296,7 +2339,7 @@ onMount(async () => {
    ============================================================================ */
 .search-container {
     position: relative;
-    width: 400px;
+    width: 32rem;
     margin: 32px 0;
 }
 
@@ -2304,11 +2347,11 @@ onMount(async () => {
     width: 100%;
     display:flex;
     align-items:flex-end;
-    height: 3rem;
-    padding: 0 40px 0 12px;
+    height: 4rem;
+    padding: 0 2rem 0 1rem;
     border: 0.5px solid #d4d4d4;
     border-radius: 12px;
-    font-size: 1rem;
+    font-size: 1.375em;
     font-family: 'DM Sans', sans-serif;
     transition: all 300ms ease-in 100ms;
 }
@@ -2323,7 +2366,7 @@ onMount(async () => {
 
 .search-icon {
     position: absolute;
-    right: 12px;
+    right: 1.5rem;
     top: 50%;
     transform: translateY(-50%);
     width: 18px;
@@ -2459,21 +2502,22 @@ onMount(async () => {
    ============================================================================ */
 .badge {
     display: inline-block;
-    padding: 0.5rem 1rem;
+    padding: 0.675rem 1.675rem;
     border-radius: 999px;
-    font-size: 0.75em;
+    font-family:'DM Sans',sans-serif;
+    font-size: 1em;
     font-weight: 600;
     letter-spacing: 0.03em;
 }
 
 .badge-success {
-    background: #10b98120;
-    color: #10b981;
+    background: #DAFFCD;
+    color: #046E11;
 }
 
 .badge-warning {
-    background: #f59e0b20;
-    color: #f59e0b;
+    color: #6E6004;
+    background: #FFEFCD;
 }
 
 .badge-danger {
@@ -2487,8 +2531,9 @@ onMount(async () => {
 }
 
 .badge-secondary {
-    background: #F2835D;
-    color: #4E2517;
+    background: #FFCDCD;
+    color: #6E0404;
+    font-weight: 800;
 }
 
 /* ============================================================================
@@ -2638,6 +2683,7 @@ onMount(async () => {
     align-items: center;
     margin-top: 20px;
     gap: 8px;
+    font-size:1em;
 }
 
 .page-dot {
@@ -3215,22 +3261,22 @@ onMount(async () => {
                     </svg> -->
                     <span class="nav-label">Upload Guest List</span>
                 </a>
-                
+                   <button class="nav-item" on:click={openSettingsModal}>
+                        <!-- <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg> -->
+                        <span class="nav-label">Edit Message Template</span>
+                    </button>
                 <div class="nav-footer">
-                    <a href="#" class="nav-item">
+                    <!-- <a href="#" class="nav-item">
                         <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
                         </svg>
                         <span class="nav-label">Support</span>
-                    </a>
-                    <a href="#" class="nav-item" >
-                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
-                        <span class="nav-label">Settings</span>
-                    </a>
-                    <div class="client-profile mx-6 my-6 ">
+                    </a> -->
+                
+                    <!-- <div class="client-profile mx-6 my-6 ">
                         <div class="client-avatar">
                             {#if clientData?.client_name}
                                 {clientData.client_name.charAt(0).toUpperCase()}
@@ -3248,7 +3294,7 @@ onMount(async () => {
                                 {/if}
                             </div>
                         </div>
-                    </div>
+                    </div> -->
                 </div>
             </nav>
         </aside>
@@ -3266,11 +3312,12 @@ onMount(async () => {
                 <section class="metrics-section">
                     <div class="section-header">
                          <div class="section-text-block">
-                        <h1 class="section-title">Dashboard</h1>
-                        <h3 class="section-description">See your wedding metrics, send and manage your invites here</h3>
+                        <h1 class="section-title">Overview</h1>
+                        <h3 class="section-description">View and personalize your metrics here.</h3>
             
                      
                     </div>
+                     <div class="header-buttons">
                      <button
                 on:click={handleUploadGuests}
                 class="uploadguests-btn"
@@ -3281,6 +3328,7 @@ onMount(async () => {
                             </svg>
                         </button>
                          
+                    </div>
                     </div>
                     <div class="metrics-grid">
                         {#each Object.keys(selectedMetrics) as metricKey}
@@ -3297,12 +3345,13 @@ onMount(async () => {
                         {/each}
                     </div>
                 </section>
-
-             
+</div>
+<div class="dashboard-content">        
             
 
 <!--Empty dashboard state-->
-{#if guestsNotSent.length === 0 && guestsSent.length === 0}
+<!-- {#if guestsNotSent.length === 0 && guestsSent.length === 0} -->
+ {#if guests.length === 0}
   <section class="empty-dashboard">
   <div class="empty-content">
     <p class="empty-title">Your dashboard is currently empty.</p>
@@ -3317,334 +3366,336 @@ onMount(async () => {
 </section>
 {/if}
 
-{#if guestsSent.length > 0}
-                 <!-- Invites Sent Table -->
-                <section class="table-container">
-                    <h2 class="section-title">Invites Sent</h2>
-                    <h4 class="section-description">Track RSVP & Check-in status on invites you've sent.</h4>
-                    <div class="section-header">
-                        <div class="search-container">
-                            <input type="text" class="search-input" placeholder="Search guests..." bind:value={searchTermSent}>
-                            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                            </svg>
+ {#if guests.length > 0 && (guestsNotSent.length > 0 || guestsSent.length === 0)}
+<!-- Invites Sent Table -->
+<section class="table-container">
+    <div class="mb-10">
+        <h2 class="section-title">Invites Sent</h2>
+        <h4 class="section-description">You currently have <span class="text-[#FF0032] medium ">{metrics.rsvpNotConfirmed} pending RSVP's.</span></h4>
+    </div>
+    <div class="section-header">
+        <div class="search-container">
+            <input type="text" class="search-input" placeholder="Search guests by name or phone number..." bind:value={searchTermSent}>
+            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+        </div>
+
+        <div class="table-actions" on:click={handleClickOutside}>
+            <!-- Sort Dropdown -->
+            <div class="dropdown-container sort-dropdown">
+                <button 
+                    class="action-btn" 
+                    on:click|stopPropagation={toggleSortMenu}
+                    on:mouseenter={() => hoveredAction = 'sort'} 
+                    on:mouseleave={() => hoveredAction = null}>
+                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                    </svg>
+                    <span class="action-label" class:expanded={hoveredAction === 'sort' || expandedAction === 'sort'}>Sort</span>
+                    <svg class="dropdown-arrow" class:rotated={showSortMenu} fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; margin-left: 4px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+
+                {#if showSortMenu}
+                    <div class="dropdown-menu" on:click|stopPropagation>
+                        <button class="dropdown-item" class:active={sortField === 'full_name'} on:click={() => setSortField('full_name')}>
+                            Name {sortField === 'full_name' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </button>
+                        <button class="dropdown-item" class:active={sortField === 'phone'} on:click={() => setSortField('phone')}>
+                            Phone {sortField === 'phone' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </button>
+                        <button class="dropdown-item" class:active={sortField === 'rsvp_status'} on:click={() => setSortField('rsvp_status')}>
+                            RSVP Status {sortField === 'rsvp_status' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </button>
+                        <button class="dropdown-item" class:active={sortField === 'checked_in'} on:click={() => setSortField('checked_in')}>
+                            Check-in {sortField === 'checked_in' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </button>
+                    </div>
+                {/if}
+            </div>
+
+            <!-- Filter Dropdown -->
+            <div class="dropdown-container filter-dropdown">
+                <button 
+                    class="action-btn" 
+                    on:click|stopPropagation={toggleFilterMenu}
+                    on:mouseenter={() => hoveredAction = 'filter'} 
+                    on:mouseleave={() => hoveredAction = null}>
+                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                    <span class="action-label" class:expanded={hoveredAction === 'filter' || expandedAction === 'filter'}>Filter</span>
+                    <svg class="dropdown-arrow" class:rotated={showFilterMenu} fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; margin-left: 4px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+
+                {#if showFilterMenu}
+                    <div class="dropdown-menu filter-menu" on:click|stopPropagation>
+                        <div class="filter-section">
+                            <label class="filter-label">RSVP Status:</label>
+                            <select bind:value={filterRsvp} class="filter-select">
+                                <option value="all">All</option>
+                                <option value="confirmed">Confirmed</option>
+                                <option value="declined">Declined</option>
+                                <option value="pending">Pending</option>
+                            </select>
                         </div>
-                        
-                        <div class="table-actions" on:click={handleClickOutside}>
-                            <!-- Sort Dropdown -->
-                            <div class="dropdown-container sort-dropdown">
-                                <button 
-                                    class="action-btn" 
-                                    on:click|stopPropagation={toggleSortMenu}
-                                    on:mouseenter={() => hoveredAction = 'sort'} 
-                                    on:mouseleave={() => hoveredAction = null}>
-                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
-                                    </svg>
-                                    <span class="action-label" class:expanded={hoveredAction === 'sort' || expandedAction === 'sort'}>Sort</span>
-                                    <svg class="dropdown-arrow" class:rotated={showSortMenu} fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; margin-left: 4px;">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                    </svg>
-                                </button>
-                                
-                                {#if showSortMenu}
-                                    <div class="dropdown-menu" on:click|stopPropagation>
-                                        <button class="dropdown-item" class:active={sortField === 'full_name'} on:click={() => setSortField('full_name')}>
-                                            Name {sortField === 'full_name' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                                        </button>
-                                        <button class="dropdown-item" class:active={sortField === 'phone'} on:click={() => setSortField('phone')}>
-                                            Phone {sortField === 'phone' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                                        </button>
-                                        <button class="dropdown-item" class:active={sortField === 'rsvp_status'} on:click={() => setSortField('rsvp_status')}>
-                                            RSVP Status {sortField === 'rsvp_status' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                                        </button>
-                                        <button class="dropdown-item" class:active={sortField === 'checked_in'} on:click={() => setSortField('checked_in')}>
-                                            Check-in {sortField === 'checked_in' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                                        </button>
-                                    </div>
-                                {/if}
-                            </div>
 
-                            <!-- Filter Dropdown -->
-                            <div class="dropdown-container filter-dropdown">
-                                <button 
-                                    class="action-btn" 
-                                    on:click|stopPropagation={toggleFilterMenu}
-                                    on:mouseenter={() => hoveredAction = 'filter'} 
-                                    on:mouseleave={() => hoveredAction = null}>
-                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                                    </svg>
-                                    <span class="action-label" class:expanded={hoveredAction === 'filter' || expandedAction === 'filter'}>Filter</span>
-                                    <svg class="dropdown-arrow" class:rotated={showFilterMenu} fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; margin-left: 4px;">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                    </svg>
-                                </button>
-                                
-                                {#if showFilterMenu}
-                                    <div class="dropdown-menu filter-menu" on:click|stopPropagation>
-                                        <div class="filter-section">
-                                            <label class="filter-label">RSVP Status:</label>
-                                            <select bind:value={filterRsvp} class="filter-select">
-                                                <option value="all">All</option>
-                                                <option value="confirmed">Confirmed</option>
-                                                <option value="declined">Declined</option>
-                                                <option value="pending">Pending</option>
-                                            </select>
-                                        </div>
-                                        
-                                        <div class="filter-section">
-                                            <label class="filter-label">Check-in Status:</label>
-                                            <select bind:value={filterCheckIn} class="filter-select">
-                                                <option value="all">All</option>
-                                                <option value="checked-in">Checked In</option>
-                                                <option value="not-checked-in">Not Checked In</option>
-                                            </select>
-                                        </div>
-                                        
-                                        <div class="filter-actions">
-                                            <button class="filter-reset-btn" on:click={resetFilters}>Reset</button>
-                                        </div>
-                                    </div>
-                                {/if}
-                            </div>
+                        <div class="filter-section">
+                            <label class="filter-label">Check-in Status:</label>
+                            <select bind:value={filterCheckIn} class="filter-select">
+                                <option value="all">All</option>
+                                <option value="checked-in">Checked In</option>
+                                <option value="not-checked-in">Not Checked In</option>
+                            </select>
+                        </div>
 
-                            <button class="action-btn" on:click={refreshData} on:mouseenter={() => hoveredAction = 'refresh'} on:mouseleave={() => hoveredAction = null}>
-                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                </svg>
-                                <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
-                            </button>
-
-                            {#if selectedGuestsSent.size > 0}
-                                <button class="action-btn" on:click={() => showMarkNotSentConfirmation = true} style="background: #f59e0b; color: white;" on:mouseenter={() => hoveredAction = 'markNotSent'} on:mouseleave={() => hoveredAction = null}>
-                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
-                                    </svg>
-                                    <span class="action-label" class:expanded={hoveredAction === 'markNotSent'}>Mark Not Sent ({selectedGuestsSent.size})</span>
-                                </button>
-
-                                <button class="action-btn-delete" on:click={() => showDeleteSentConfirmation = true} on:mouseenter={() => hoveredAction = 'delete'} on:mouseleave={() => hoveredAction = null}>
-                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                    </svg>
-                                    <span class="action-label-delete font-semibold tracking-[0.33px] visible">Delete ({selectedGuestsSent.size})</span>
-                                </button>
-                            {/if}
+                        <div class="filter-actions">
+                            <button class="filter-reset-btn" on:click={resetFilters}>Reset</button>
                         </div>
                     </div>
+                {/if}
+            </div>
 
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 40px;">
-                                    <input type="checkbox" 
-                                        checked={selectedGuestsSent.size === guestsSent.length && guestsSent.length > 0}
-                                        on:change={selectAllSentGuests}
-                                        style="width:22px; height:22px;">
-                                </th>
-                                <th>Name</th>
-                                <th>Phone</th>
-                                <th>RSVP Status</th>
-                                <th>Check-in Status</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#each paginatedGuestsSent as guest}
-                                {@const rsvpStatus = getRsvpStatusBadge(guest.rsvp_status)}
-                                {@const checkInStatus = getCheckInStatusBadge(guest.checked_in)}
-                               <tr class="clickable-row" on:click={(e) => handleGuestRowClick(guest, e)}>
-                                    <td>
-                                        <input type="checkbox"
-                                            checked={selectedGuestsSent.has(guest.guest_id)}
-                                            on:change={() => toggleSentGuestSelection(guest.guest_id)}
-                                            style="width:22px; height:22px">
-                                    </td>
-                                    <td>
-                                        <div class="name-cell" style="font-weight: 500;">
-                                            {guest.full_name || 'N/A'}
-                                        </div>
-                                        {#if guest.email}
-                                            <div style="font-size: 12px; color: #737373;">{guest.email}</div>
-                                        {/if}
-                                    </td>
-                                    <td>{guest.phone || '-'}</td>
-                                    <td><span class="badge {rsvpStatus.class}">{rsvpStatus.text}</span></td>
-                                    <td><span class="badge {checkInStatus.class}">{checkInStatus.text}</span></td>
-                                    <td>
-                                        <button 
-                                            class="action-btn" 
-                                            style="height: 28px; background: #3b82f6; color: white; border: none;"
-                                            on:click|stopPropagation={() => goto(`/${clientSlug}/dashboard/details/${guest.guest_id}`)}
-                                            title="See Guest Details">
-                                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                            </svg>
-                                            <span style="margin-left: 4px; font-size: 12px;">View Details</span>
-                                        </button>
-                                    </td>
-                                </tr>
-                            {/each}
+            <button class="action-btn" on:click={refreshData} on:mouseenter={() => hoveredAction = 'refresh'} on:mouseleave={() => hoveredAction = null}>
+                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
+            </button>
 
-                            {#if guestsSent.length === 0}
-                                <tr>
-                                    <td colspan="6" style="text-align: center; padding: 48px; color: #737373;">
-                                        {searchTermSent ? 'No guests found matching your search.' : 'No invites have been sent yet.'}
-                                    </td>
-                                </tr>
+            {#if selectedGuestsSent.size > 0}
+                <button class="action-btn" on:click={() => showMarkNotSentConfirmation = true} style="background: #f59e0b; color: white;" on:mouseenter={() => hoveredAction = 'markNotSent'} on:mouseleave={() => hoveredAction = null}>
+                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                    </svg>
+                    <span class="action-label" class:expanded={hoveredAction === 'markNotSent'}>Mark Not Sent ({selectedGuestsSent.size})</span>
+                </button>
+
+                <button class="action-btn-delete" on:click={() => showDeleteSentConfirmation = true} on:mouseenter={() => hoveredAction = 'delete'} on:mouseleave={() => hoveredAction = null}>
+                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    <span class="action-label-delete font-semibold tracking-[0.33px] visible">Delete ({selectedGuestsSent.size})</span>
+                </button>
+            {/if}
+        </div>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width: 40px;">
+                    <input type="checkbox" 
+                        checked={selectedGuestsSent.size === guestsSent.length && guestsSent.length > 0}
+                        on:change={selectAllSentGuests}
+                        style="width:30px; height:30px;">
+                </th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>RSVP Status</th>
+                <th>Check-in Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {#if paginatedGuestsSent.length > 0}
+                {#each paginatedGuestsSent as guest}
+                    {@const rsvpStatus = getRsvpStatusBadge(guest.rsvp_status)}
+                    {@const checkInStatus = getCheckInStatusBadge(guest.checked_in)}
+                    <tr class="clickable-row" on:click={(e) => handleGuestRowClick(guest, e)}>
+                        <td>
+                            <input type="checkbox"
+                                checked={selectedGuestsSent.has(guest.guest_id)}
+                                on:change={() => toggleSentGuestSelection(guest.guest_id)}
+                                style="width:30px; height:30px">
+                        </td>
+                        <td>
+                            <div class="name-cell">
+                                {guest.full_name || 'N/A'}
+                            </div>
+                            {#if guest.email}
+                                <div style="font-size: 12px; color: #737373;">{guest.email}</div>
                             {/if}
-                        </tbody>
-                    </table>
-                    
-                    <div class="pagination">
-                        <button on:click={() => goToSentGuestPage(guestPageSent - 1)} disabled={guestPageSent === 1}>Prev</button>
-                        {#each Array(totalSentPages) as _, index}
+                        </td>
+                        <td> <div class="phone-cell">{guest.phone || '-'}</div></td>
+                        <td><span class="badge {rsvpStatus.class}">{rsvpStatus.text}</span></td>
+                        <td><span class="badge {checkInStatus.class}">{checkInStatus.text}</span></td>
+                        <td>
                             <button 
-                                class:active={guestPageSent === index + 1}
-                                on:click={() => goToSentGuestPage(index + 1)}>
-                                {index + 1}
+                                class="viewdetails-btn" 
+                                on:click|stopPropagation={() => goto(`/${clientSlug}/dashboard/details/${guest.guest_id}`)}
+                                title="See Guest Details">
+                                <svg fill="currentColor" width="1rem" height="1rem" class="viewdetails-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3.293,20.707a1,1,0,0,1,0-1.414L17.586,5H12a1,1,0,0,1,0-2h8a1,1,0,0,1,1,1v8a1,1,0,0,1-2,0V6.414L4.707,20.707a1,1,0,0,1-1.414,0Z"/></svg>
+                                <span class="viewdetails-btn-label">Open Details</span>
                             </button>
-                        {/each}
-                        <button on:click={() => goToSentGuestPage(guestPageSent + 1)} disabled={guestPageSent === totalSentPages}>Next</button>
-                    </div>
-                </section>
+                        </td>
+                    </tr>
+                {/each}
+            {:else}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 48px; color: #737373;">
+                        {searchTermSent ? 'No guests found matching your search.' : 'No invites have been sent yet.'}
+                    </td>
+                </tr>
+            {/if}
+        </tbody>
+    </table>
+
+    <div class="pagination">
+        <button on:click={() => goToSentGuestPage(guestPageSent - 1)} disabled={guestPageSent === 1}>Prev</button>
+        {#each Array(totalSentPages) as _, index}
+            <button 
+                class:active={guestPageSent === index + 1}
+                on:click={() => goToSentGuestPage(index + 1)}>
+                {index + 1}
+            </button>
+        {/each}
+        <button on:click={() => goToSentGuestPage(guestPageSent + 1)} disabled={guestPageSent === totalSentPages}>Next</button>
+    </div>
+</section>
 {/if}
 
-{#if guestsNotSent.length > 0}
-                <!-- Invites Not Sent Table -->
-                <section class="table-container">
-                    <h2 class="section-title">Invites Not Sent</h2>
-                     <h3 class="section-description">Find all your newly imported guests here.</h3>
 
-                    <div class="section-header table">
-                        <div class="search-container">
-                            <input type="text" class="search-input" placeholder="Search guests..." bind:value={searchTermNotSent}>
-                            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                            </svg>
-                        </div>
-                        
-                        <div class="table-actions" on:click={handleClickOutside}>
-                            <button class="action-btn" on:click={refreshData} on:mouseenter={() => hoveredAction = 'refresh'} on:mouseleave={() => hoveredAction = null}>
-                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                </svg>
-                                <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
-                            </button>
+ <!-- Invites Not Sent Table -->
+<!-- {#if guestsNotSent.length > 0} -->
+ {#if guests.length > 0 && (guestsNotSent.length > 0 || guestsSent.length === 0)}
+<section class="table-container">
+    <div class="mb-10">
+        <h2 class="section-title">Invites Not Sent</h2>
+        <h3 class="section-description">
+            You currently have 
+            <span class="text-[#FF0032] medium">{metrics.invitesNotSent} unsent invites.</span>
+        </h3>
+    </div>
 
-                            {#if selectedGuestsNotSent.size > 0}
-                                <button class="action-btn-delete" on:click={() => showDeleteConfirmation = true} on:mouseenter={() => hoveredAction = 'delete'} on:mouseleave={() => hoveredAction = null}>
-                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+    <div class="section-header table">
+        <div class="search-container">
+            <input 
+                type="text" 
+                class="search-input" 
+                placeholder="Search guests by name or phone.." 
+                bind:value={searchTermNotSent}>
+            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+        </div>
+
+        <div class="table-actions" on:click={handleClickOutside}>
+            <button class="action-btn" on:click={refreshData}
+                    on:mouseenter={() => hoveredAction = 'refresh'}
+                    on:mouseleave={() => hoveredAction = null}>
+                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
+            </button>
+
+            {#if selectedGuestsNotSent.size > 0}
+            <button class="action-btn-delete" on:click={() => showDeleteConfirmation = true}>
+                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                <span class="action-label-delete visible">
+                    Delete ({selectedGuestsNotSent.size})
+                </span>
+            </button>
+            {/if}
+
+            <button class="action-btn-db ml-2" on:click={() => showAddGuestModal = true}>
+                <span class="action-label-db">Add a Guest</span>
+            </button>
+        </div>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width: 40px;">
+                    <input type="checkbox" 
+                           checked={selectedGuestsNotSent.size === guestsNotSent.length && guestsNotSent.length > 0}
+                           on:change={selectAllNotSentGuests}
+                           style="width:30px; height:30px;">
+                </th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Invite Sent</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {#if paginatedGuestsNotSent.length > 0}
+                {#each paginatedGuestsNotSent as guest}
+                    <tr>
+                        <td>
+                            <input type="checkbox"
+                                   checked={selectedGuestsNotSent.has(guest.guest_id)}
+                                   on:change={() => toggleNotSentGuestSelection(guest.guest_id)}
+                                   style="width:30px; height:30px;">
+                        </td>
+                        <td>
+                            <div class="name-cell">{guest.full_name || 'N/A'}</div>
+                            {#if guest.email}
+                                <div style="font-size: 12px; color: #737373;">{guest.email}</div>
+                            {/if}
+                        </td>
+                        <td><div class="phone-cell">{guest.phone || '-'}</div></td>
+                        <td><span class="badge badge-secondary">Not Sent</span></td>
+                        <td>
+                            {#if guest.phone}
+                                <button class="whatsapp-btn" 
+                                        on:click|stopPropagation={() => sendWhatsAppInvite(guest)}>
+                                    <svg width="1rem" height="1rem" class="whatsapp-icon" viewBox="0 0 24 24">
+                                        <path d="M17.472 14.382..."/>
                                     </svg>
-                                    <span class="action-label-delete font-semibold tracking-[0.33px] visible">Delete ({selectedGuestsNotSent.size})</span>
+                                    <span class="whatsapp-btn-label">Send Invite</span>
                                 </button>
-                            {/if}
-                            
-                            <button class="action-btn-db ml-2 hover:scale-101" on:click={() => showAddGuestModal = true} on:mouseenter={() => hoveredAction = 'add'} on:mouseleave={() => hoveredAction = null}>
-                                <span class="action-label-db tracking-[0.33px] font-semibold">Add a Guest</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 40px;">
-                                    <input type="checkbox" 
-                                        checked={selectedGuestsNotSent.size === guestsNotSent.length && guestsNotSent.length > 0}
-                                        on:change={selectAllNotSentGuests}
-                                        style="width:24px; height:24px;">
-                                </th>
-                                <th>Name</th>
-                                <th>Phone</th>
-                                <th>Invite Sent</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        
-                        <tbody>
-                             {#if paginatedGuestsNotSent.length > 0}
-                            {#each paginatedGuestsNotSent as guest}
-                               <!-- <tr class="clickable-row" on:click={(e) => handleGuestRowClick(guest, e)}> -->
-                                 <tr>
-                                    <td>
-                                        <input type="checkbox"
-                                            checked={selectedGuestsNotSent.has(guest.guest_id)}
-                                            on:change={() => toggleNotSentGuestSelection(guest.guest_id)}
-                                            style="width:24px; height:24px;">
-                                    </td>
-                                    <td>
-                                        <div class="name-cell" style="font-weight: 500;">
-                                            {guest.full_name || 'N/A'}
-                                        </div>
-                                        {#if guest.email}
-                                            <div style="font-size: 12px; color: #737373;">{guest.email}</div>
-                                        {/if}
-                                    </td>
-                                    <td>{guest.phone || '-'}</td>
-                                    <td><span class="badge badge-secondary">Not Sent</span></td>
-                                    <td>
-                                        {#if guest.phone}
-                                            <button 
-                                                class="whatsapp-btn" 
-                                                style=""
-                                                on:click|stopPropagation={() => sendWhatsAppInvite(guest)}
-                                                title="Send WhatsApp Invite">
-                                                <svg width="16px" height="16px" fill="currentColor" viewBox="0 0 24 24">
-                                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.570-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
-                                                </svg>
-                                                <span class="whatsapp-btn-label">Send</span>
-                                            </button>
-                                        {:else}
-                                            <button 
-                                                class="action-btn no-phone-btn" 
-                                                style="height: 28px; background: #ef4444; color: white; border: none;" 
-                                                disabled
-                                                title="No Phone Number">
-                                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                                </svg>
-                                                <span style="margin-left: 4px; font-size: 12px;">No Phone</span>
-                                            </button>
-                                        {/if}
-                                    </td>
-                                </tr>
-                            {/each}
-                            
-                            {#if guestsNotSent.length === 0}
-                                <tr>
-                                    <td colspan="5" style="text-align: center; padding: 48px; color: #737373;">
-                                        {searchTermNotSent ? 'No guests found matching your search.' : 'All guests have been sent invites!'}
-                                    </td>
-                                </tr>
-                            {/if}
                             {:else}
-                            <tr>
-                                <td colspan="5" style="text-align: center; padding: 48px; color: #737373;">
-                                No guests found matching your search.
-                                </td>
-                            </tr>
+                                <button class="action-btn no-phone-btn" disabled
+                                        style="background: #ef4444; color: white;">
+                                    <span style="font-size: 12px;">No Phone</span>
+                                </button>
                             {/if}
-      
-                        </tbody>
-                    </table>
-                    
-                    <div class="pagination">
-                        <button on:click={() => goToNotSentGuestPage(guestPage - 1)} disabled={guestPage === 1}>Prev</button>
-                        {#each Array(totalNotSentPages) as _, index}
-                            <button 
-                                class:active={guestPage === index + 1}
-                                on:click={() => goToNotSentGuestPage(index + 1)}>
-                                {index + 1}
-                            </button>
-                        {/each}
-                        <button on:click={() => goToNotSentGuestPage(guestPage + 1)} disabled={guestPage === totalNotSentPages}>Next</button>
-                    </div>
-                </section>
+                        </td>
+                    </tr>
+                {/each}
+            {:else}
+                <!-- Handles search returning nothing -->
+                <tr>
+                    <td colspan="5" style="text-align:center; padding:48px; color:#737373;">
+                        {searchTermNotSent 
+                          ? 'No guests found matching your search.' 
+                          : 'All guests have been sent invites!'}
+                    </td>
+                </tr>
+            {/if}
+        </tbody>
+    </table>
+
+    <div class="pagination">
+        <button on:click={() => goToNotSentGuestPage(guestPage - 1)} disabled={guestPage === 1}>
+            Prev
+        </button>
+        {#each Array(totalNotSentPages) as _, index}
+            <button class:active={guestPage === index + 1}
+                    on:click={() => goToNotSentGuestPage(index + 1)}>
+                {index + 1}
+            </button>
+        {/each}
+        <button on:click={() => goToNotSentGuestPage(guestPage + 1)} disabled={guestPage === totalNotSentPages}>
+            Next
+        </button>
+    </div>
+</section>
 {/if}
+
                
                 <!-- Add Guest Modal -->
                 {#if showAddGuestModal}
@@ -3836,9 +3887,11 @@ onMount(async () => {
                                 <div class="character-count">
                                     {previewMessage.length} characters
                                 </div>
-                                <div class="change-globaltemp">
-                                    <a href="">Click to change your global template here</a>
-                                </div>
+                               <div class="change-globaltemp">
+    <button on:click={openSettingsModal} style="background: none; border: none; padding: 0; cursor: pointer; color: black; font-size: 1em; font-weight: 500; text-decoration: underline; text-decoration-color: #ababab; text-underline-offset: 4px; opacity: 50%;">
+        Click to change your global template here
+    </button>
+</div>
                             </div>
                             </div>
                             
@@ -3857,6 +3910,130 @@ onMount(async () => {
                         </div>
                     </div>
                 {/if}
+                
+                <!-- Settings Modal for Message Templates -->
+{#if showSettingsModal}
+    <div class="modal-overlay" on:click={closeSettingsModal}>
+        <div class="settings-modal-content" on:click|stopPropagation>
+            <div class="modal-header">
+                <h3 class="modal-title">Message Templates</h3>
+                <button class="modal-close" on:click={closeSettingsModal}>
+                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Template Tabs -->
+            <div class="settings-tabs">
+                <button 
+                    class="settings-tab-btn" 
+                    class:active={settingsActiveTab === 'invite'}
+                    on:click={() => settingsActiveTab = 'invite'}>
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                    Invite Message
+                </button>
+                <button 
+                    class="settings-tab-btn" 
+                    class:active={settingsActiveTab === 'thankYou'}
+                    on:click={() => settingsActiveTab = 'thankYou'}>
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                    </svg>
+                    Thank You Message
+                </button>
+            </div>
+            
+            <!-- Template Content -->
+            <div class="settings-content">
+                <div class="template-editor-container">
+                    <!-- Variables Sidebar -->
+                    <div class="variables-section">
+                        <h4 class="variables-title">Available Variables</h4>
+                        <p style="font-size: 11px; color: #737373; margin-bottom: 12px;">
+                            Click to insert into template
+                        </p>
+                        <div class="variables-grid">
+                            <button class="variable-btn" on:click={() => insertVariable('{guest_name}')}>
+                                <span class="variable-name">{'{guest_name}'}</span>
+                                <span class="variable-desc">Guest's full name</span>
+                            </button>
+                            <button class="variable-btn" on:click={() => insertVariable('{client_name}')}>
+                                <span class="variable-name">{'{client_name}'}</span>
+                                <span class="variable-desc">Your wedding name</span>
+                            </button>
+                            <button class="variable-btn" on:click={() => insertVariable('{event_date}')}>
+                                <span class="variable-name">{'{event_date}'}</span>
+                                <span class="variable-desc">Wedding date</span>
+                            </button>
+                            <button class="variable-btn" on:click={() => insertVariable('{location}')}>
+                                <span class="variable-name">{'{location}'}</span>
+                                <span class="variable-desc">Wedding venue</span>
+                            </button>
+                            <button class="variable-btn" on:click={() => insertVariable('{rsvp_deadline}')}>
+                                <span class="variable-name">{'{rsvp_deadline}'}</span>
+                                <span class="variable-desc">RSVP deadline</span>
+                            </button>
+                            <button class="variable-btn" on:click={() => insertVariable('{invite_url}')}>
+                                <span class="variable-name">{'{invite_url}'}</span>
+                                <span class="variable-desc">Personal invite link</span>
+                            </button>
+                            {#if settingsActiveTab === 'thankYou'}
+                                <button class="variable-btn" on:click={() => insertVariable('{gift_description}')}>
+                                    <span class="variable-name">{'{gift_description}'}</span>
+                                    <span class="variable-desc">Gift details</span>
+                                </button>
+                            {/if}
+                        </div>
+                    </div>
+                    
+                    <!-- Template Editor -->
+                    <div class="template-editor">
+                        <div class="editor-header">
+                            <h4 class="editor-title">
+                                {settingsActiveTab === 'invite' ? 'Invite' : 'Thank You'} Template
+                            </h4>
+                            <button class="reset-btn" on:click={resetToDefault}>
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Reset to Default
+                            </button>
+                        </div>
+                        <textarea 
+                            id="template-{settingsActiveTab}"
+                            class="template-textarea"
+                            bind:value={tempMessageTemplates[settingsActiveTab === 'invite' ? 'invite' : 'thankYou']}
+                            placeholder="Enter your message template..."
+                        />
+                        <div class="template-info">
+                            <span class="character-count">
+                                {tempMessageTemplates[settingsActiveTab === 'invite' ? 'invite' : 'thankYou'].length} characters
+                            </span>
+                            <span class="template-tip">
+                                💡 Variables will be auto-filled when sending
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="form-actions" style="padding: 0 24px 24px;">
+                <button class="btn btn-secondary" on:click={closeSettingsModal}>
+                    Cancel
+                </button>
+                <button class="btn btn-primary" on:click={saveMessageTemplates} disabled={isSavingTemplates}>
+                    {isSavingTemplates ? 'Saving...' : 'Save Templates'}
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}
+
+
 
                 <!-- Metrics Settings Modal -->
                 {#if showMetricsSettings}

@@ -28,6 +28,11 @@
   let submissionMessage = '';
   let submissionError = '';
 
+  let mealPreference = '';
+
+  $: showMealOptions = invite?.meal_options_enabled && attending === 'yes';
+$: mealOptions = invite?.meal_options || [];
+
   // Validation state - only show errors after user tries to proceed
   let showValidationErrors = false;
   let validationErrors = {
@@ -36,7 +41,39 @@
     phone: ''
   };
 
+
+const fontThemes = {
+  client1: {
+    display: "'Snell Roundhand', serif",
+    subheading: "'SangBleu Regular', sans-serif", 
+    button: "'DM Sans ExtraBold', sans-serif",
+    h3: "'SangBleu Light', serif",
+    h2: "'SangBleu Light', serif",
+    p: "'SangBleu Light', serif",
+    smallcaption: "'DM Sans Bold', sans-serif"
+  },
+  client2: {
+    display: "'Playfair Display', serif",
+    subheading: "'Montserrat', sans-serif",
+    button: "'Roboto', sans-serif", 
+    h3: "'Lora', serif",
+    h2: "'Lora', serif",
+    p: "'Open Sans', serif",
+    smallcaption: "'Inter', sans-serif"
+  }
+  // Add more clients as needed
+};
+
+export let clientId = 'client1'; // This would come from your database/props
+let currentTheme = fontThemes[clientId] || fontThemes.client1;
+
+
   onMount(async () => {
+      const root = document.documentElement;
+  Object.entries(currentTheme).forEach(([key, value]) => {
+    root.style.setProperty(`--font-${key}`, value);
+  });
+
     if (guest) {
       initializeGuestData(guest);
     } else if (guestSlug) {
@@ -44,6 +81,11 @@
     } else {
       submissionError = 'Invalid invitation link';
     }
+   console.log('🔍 Invite object:', invite);
+  console.log('🔍 meal_options_enabled:', invite?.meal_options_enabled);
+  console.log('🔍 meal_options:', invite?.meal_options);
+  console.log('🔍 showMealOptions will be:', invite?.meal_options_enabled && attending === 'yes');
+  
   });
 
   function initializeGuestData(guestData) {
@@ -79,6 +121,7 @@
       phone: ''
     };
 
+
     let isValid = true;
 
     // Check if fields are empty
@@ -109,25 +152,55 @@
     return isValid;
   }
 
-  function nextStep() {
-    if (step === 1) {
-      showValidationErrors = true;
-      if (!validateStep1()) {
-        return; // Don't proceed if validation fails
-      }
-    }
-
-    showValidationErrors = false; // Reset for next step
-    if (step === 2 && attending === 'no') step = 3;
-    else step++;
+   function validateStep2() {
+  if (showMealOptions && attending === 'yes' && !mealPreference) {
+    return false; // Meal selection is required
   }
+  return true;
+}
+
+ function nextStep() {
+  if (step === 1) {
+    showValidationErrors = true;
+    if (!validateStep1()) {
+      return;
+    }
+  }
+  
+  if (step === 2) {
+    if (attending === 'no') {
+      step = 3; // Skip meal selection for non-attendees
+    } else if (showMealOptions) {
+      step = 2.5; // Go to meal selection step
+    } else {
+      step = 3; // Skip to wishes if no meal options
+    }
+  } else if (step === 2.5) {
+    // Validate meal selection when leaving step 2.5
+    if (showMealOptions && !validateStep2()) {
+      showValidationErrors = true;
+      return;
+    }
+    step = 3; // Go to wishes after meal selection
+  } else {
+    step++;
+  }
+  
+  showValidationErrors = false;
+}
 
   function prevStep() {
-    if (step > 1) {
-      showValidationErrors = false; // Reset validation errors when going back
+  if (step > 1) {
+    showValidationErrors = false;
+    if (step === 2.5) {
+      step = 2; // Go back to attendance question
+    } else if (step === 3 && showMealOptions && attending === 'yes') {
+      step = 2.5; // Go back to meal selection
+    } else {
       step--;
     }
   }
+}
 
   function incrementGuest() {
     guestCount++;
@@ -159,6 +232,7 @@
         rsvp_status: attending === 'yes',
         guest_count: attending === 'yes' ? guestCount : 0,
         dietary_restriction: dietary,
+        meal_preference: showMealOptions ? mealPreference : null,
         wishes,
         email,
         phone,
@@ -331,8 +405,16 @@ const sendEmail = async () => {
   @reference "tailwindcss";
 
  
-  :global(html) {
+ :global(html) {
     background-color: theme(--color-gray-100);
+    /* Define default fonts as fallback */
+    --font-display: 'Snell Roundhand', serif;
+    --font-subheading: 'SangBleu Regular', sans-serif;
+    --font-button: 'DM Sans ExtraBold', sans-serif;
+    --font-h3: 'SangBleu Light', serif;
+    --font-h2: 'SangBleu Light', serif;
+    --font-p: 'SangBleu Light', serif;
+    --font-smallcaption: 'DM Sans Bold', sans-serif;
   }
   
   
@@ -356,64 +438,63 @@ const sendEmail = async () => {
   transform: translateY(0);
 }
 
-.font-subheading {
-    font-family:'SangBleu Regular', sans-serif;
-    font-size:0.75rem;
+ .font-subheading {
+    font-family: var(--font-subheading);
+    font-size: 0.75rem;
     letter-spacing: 0.25em;
-}
+  }
 
-.font-display {
-    font-family:'Snell Roundhand', serif;
-    font-size:4.75rem;
-}
+ .font-display {
+    font-family: var(--font-display);
+    font-size: 4.75rem;
+  }
 
 .font-display.dresscode{
-    font-family:'Snell Roundhand', serif;
     font-size:2.25rem;
 }
 
-.font-button {
-  font-family:'DM Sans ExtraBold', sans-serif;
-  font-size:0.75rem;
-  letter-spacing: 0.25em;
-}
+ .font-button {
+    font-family: var(--font-button);
+    font-size: 0.75rem;
+    letter-spacing: 0.25em;
+  }
 
-.font-h3 {
-  font-family:'SangBleu Light',serif;
-  font-size:1.25rem;
-  letter-spacing:0.025em;
-}
+ .font-h3 {
+    font-family: var(--font-h3);
+    font-size: 1.25rem;
+    letter-spacing: 0.025em;
+  }
 
 .font-h3.eventtime {
-  font-family:'SangBleu Light',serif;
-  font-size:1rem;
-  margin-top:4px;
-  opacity:90%;
-}
+    font-family: var(--font-h3);
+    font-size: 1rem;
+    margin-top: 4px;
+    opacity: 90%;
+  }
 
 .font-h2 {
-  font-family:'SangBleu Light',serif;
-  font-size:1.75rem;
-  letter-spacing:0.050em;
-}
+    font-family: var(--font-h2);
+    font-size: 1.75rem;
+    letter-spacing: 0.050em;
+  }
 
-.font-h2.countdown {
-  font-family:'SangBleu Light',serif;
-  font-size:2.5rem;
-}
+  .font-h2.countdown {
+    font-family: var(--font-h2);
+    font-size: 2.5rem;
+  }
 
-.font-p {
-  font-family:'SangBleu Light',serif;
-  font-size:1.75rem;
-}
+  .font-p {
+    font-family: var(--font-p);
+    font-size: 1.75rem;
+  }
 
-.font-smallcaption {
-  font-family:'DM Sans Bold', sans-serif;
-  font-size:0.75rem;
-  font-weight:600;
-  opacity:70%;
-  letter-spacing: 0.25em;
-}
+  .font-smallcaption {
+    font-family: var(--font-smallcaption);
+    font-size: 0.75rem;
+    font-weight: 600;
+    opacity: 70%;
+    letter-spacing: 0.25em;
+  }
 
 @media (max-width: 376px) {
   .rsvp-section {
@@ -547,6 +628,38 @@ const sendEmail = async () => {
           </div>
         </div>
       {/if}
+
+      {#if step === 2.5 && showMealOptions}
+  <div class="space-y-6">
+    <div>
+      <p class="mb-4 font-smallcaption uppercase">Choose Your Main (4-Course Meal)</p>
+      <div class="space-y-3">
+        {#each mealOptions as option, index}
+          <button
+            class={`w-full text-left font-h3 border border-white px-4 py-4 rounded-md transition-all duration-200 ease-in
+                  ${mealPreference === option ? 'bg-[#C7DDD8] !text-black/90' : 'bg-transparent text-white hover:bg-white/10'}`}
+            on:click={() => mealPreference = option}
+          >
+            {index + 1}. {option}
+          </button>
+        {/each}
+      </div>
+      
+      {#if showValidationErrors && !mealPreference}
+        <p class="text-red-400 text-sm opacity-90 font-smallcaption mt-2">Please select a meal option</p>
+      {/if}
+    </div>
+
+    <div class="flex justify-between">
+      <button on:click={prevStep} class="font-smallcaption uppercase border border-white text-white py-4 px-6 rounded-md hover:bg-white hover:text-black transition">
+        Back
+      </button>
+      <button on:click={nextStep} class="font-button uppercase rounded-md py-4 px-6 transition text-black/90 bg-[#C7DDD8] hover:bg-[#b5d0c9]">
+        Next
+      </button>
+    </div>
+  </div>
+{/if}
 
       <!-- Step 3 -->
       {#if step === 3}
