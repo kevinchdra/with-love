@@ -406,11 +406,10 @@
     const backgroundSection = document.querySelector('.section.base');
     if (backgroundSection) {
       const sectionColors = [
-        '#FBF9EF','#F5F1E8','#EFE8D8','#E8DCC8','#E0D0B8',
-        '#D8C4A8','#D0B898','#C8AC88','#C0A078','#B89468',
-        '#B08858','#A87C48','#A07038','#986428'
-      ];
-
+        '#DEE5EB','#DCE2E7','#D9DFE3','#D7DCDF','#D4D9DB',
+        '#D2D6D7','#CFD3D3','#CDD0CF','#CACDCB','#C8CAC7',
+        '#C5C7C3','#C3C4BF','#C0C1BB','#D3CBAE'
+];
       // One timeline that spans the entire masterScroll
       const tl = gsap.timeline({
         defaults: { ease: "none" },
@@ -475,14 +474,14 @@
               <div class="w-full h-full bg-[#F5F1E8]"></div>
             {/if}
           </div>
-          <div class="scroll-image-large _2" style="margin-top: 60vh;">
+          <div class="scroll-image-large _3" style="margin-top: 60vh;">
             {#if imageUrls.length > 0}
               <img src={getImageUrl(1)} loading="lazy" alt="" class="image-cover">
             {:else}
               <div class="w-full h-full "></div>
             {/if}
           </div>
-          <div class="scroll-image-large _3" style="margin-top: 60vh;">
+          <div class="scroll-image-large _4" style="margin-top: 60vh;">
             {#if imageUrls.length > 0}
               <img src={getImageUrl(2)} loading="lazy" alt="" class="image-cover">
             {:else}
@@ -709,12 +708,12 @@
 
   .scroll-image-large._3 {
     margin-top: 60vh;
-    rotate: -4deg;
+    rotate: -2deg;
   }
 
   .scroll-image-large._4 {
     margin-top: 60vh;
-    rotate: 4deg;
+    rotate: 2deg;
   }
 
   .scroll-image-large.heading-404 {
