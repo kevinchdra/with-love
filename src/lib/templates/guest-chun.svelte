@@ -535,27 +535,21 @@ function preloadAudio(src) {
     }
   }
 
-  const lines = [
-     `Hi, ${guest.full_name}`,
-    "By the time you read this, our wedding day will already be drawing near.",
-    "We used to think a wedding was simply a formality,",
-    "but now we know, it is a rare and precious gathering,",
-    "a journey of love from miles away, a gift of presence we will forever treasure.",
-    "In a lifetime of more than 30,000 days, what moves us most,",
-    "is that you’ve chosen to spend this one day with us.",
-    "This day, our wedding day, will forever be extraordinary,",
-    "because you have chosen to share it with us.",
-    "Your presence is the greatest blessing, a reminder that love is not just between two people,",
-    "but carried and strengthened by the hearts around them.",
-    "Thank you for coming, thank you for standing by us.",
-    "It’s been a while but we can’t wait to see you at the wedding."
-  ]
 
+function hideBrowserChrome() {
+  // Scroll down by 1px to trigger browser UI hiding
+  window.scrollTo(0, 1);
+  
+  // Alternative: Use smooth scroll
+  // window.scrollTo({ top: 1, behavior: 'smooth' });
+}
 
   onMount(async () => {
+    setTimeout(hideBrowserChrome, 100)
   // Start preloading immediately
   await preloadAllAssets();
   
+
   updateCountdown();
   intervalTime = setInterval(updateCountdown, 1000);
 
@@ -578,7 +572,7 @@ function preloadAudio(src) {
   );
 
   // Lenis smooth scroll (keep your existing setup)
-  const lenis = new Lenis({ smoothWheel: true, wheelMultiplier: 0.3 })
+  const lenis = new Lenis({ smoothWheel: true, wheelMultiplier: 0.4,  lerp: 0.05})
   function raf(time) {
     lenis.raf(time)
     requestAnimationFrame(raf)

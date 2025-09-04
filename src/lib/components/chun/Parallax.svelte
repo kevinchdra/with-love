@@ -6,7 +6,7 @@
   export let guest = { full_name: 'Guest' };
   export let clientSlug = ''; // Pass the client slug to get their specific images
   
-  let gsap, ScrollTrigger, SplitText;
+  let gsap, ScrollTrigger;
   let mounted = false;
   let fontsLoaded = false;
   let imageUrls = [];
@@ -99,24 +99,23 @@
   
   onMount(async () => {
     const baseSection = document.querySelector('.section.base');
-  if (baseSection) {
-    baseSection.style.backgroundColor = '#FBF9EF';
-  }
+    if (baseSection) {
+      baseSection.style.backgroundColor = '#FBF9EF';
+    }
+    
     try {
       // Load images first
       await loadImagesFromSupabase();
       
-      // Import GSAP modules
+      // Import GSAP modules (no SplitText needed)
       const gsapModule = await import('gsap');
       const scrollTriggerModule = await import('gsap/ScrollTrigger');
-      const splitTextModule = await import('gsap/SplitText');
       
       gsap = gsapModule.gsap;
       ScrollTrigger = scrollTriggerModule.ScrollTrigger;
-      SplitText = splitTextModule.SplitText;
       
       // Register plugins
-      gsap.registerPlugin(ScrollTrigger, SplitText);
+      gsap.registerPlugin(ScrollTrigger);
       
       mounted = true;
       
@@ -152,99 +151,26 @@
       return;
     }
     
-    const textElements = [];
-    
-    // Create text elements array for all lines with existence checks
-    lines.forEach((_, index) => {
-      const element = document.querySelector(`.text-h2.scroll-${index + 1}`);
-      if (element) {
-        textElements.push({ element, index });
-      }
-    });
-    
-    if (!textElements.length) {
-      console.warn('No text elements found');
-      return;
-    }
-    
-    // Create SplitText instances for all text elements
-    const textSplits = [];
-    textElements.forEach(({ element, index }) => {
-      try {
-        // Split into words first, then chars within each word
-        const split = new SplitText(element, { 
-          type: "words,chars",
-          wordsClass: "word-reveal",
-          charsClass: "char-reveal"
-        });
-        
-        // Set initial state - all characters hidden except first
-        if (split.chars && split.chars.length > 0) {
-          gsap.set(split.chars, {
-            opacity: index === 0 ? 1 : 0,
-            y: index === 0 ? "0%" : "100%"
-          });
-          
-          textSplits[index] = split;
-        }
-      } catch (error) {
-        console.warn(`Failed to create SplitText for element ${index}:`, error);
-      }
-    });
-    
-    // Set initial wrapper states
+    // Set initial states for all wrappers and text elements
     scrollWrappers.forEach((wrapper, index) => {
-      if (wrapper) {
-        if (index === 0) {
-          gsap.set(wrapper, { opacity: 1 });
-        } else {
-          gsap.set(wrapper, { opacity: 0 });
+      if (!wrapper) return;
+      
+      const textElement = wrapper.querySelector('.text-h2');
+      
+      if (index === 0) {
+        // First element visible
+        gsap.set(wrapper, { opacity: 1 });
+        if (textElement) {
+          gsap.set(textElement, { opacity: 1, scale: 1 });
+        }
+      } else {
+        // All others hidden and scaled down
+        gsap.set(wrapper, { opacity: 0 });
+        if (textElement) {
+          gsap.set(textElement, { opacity: 0, scale: 0.9 });
         }
       }
     });
-    
-    // Helper function to create word-respecting stagger animation
-    function animateTextIn(split, delay = 0) {
-      if (!split || !split.words || split.words.length === 0) return;
-      
-      split.words.forEach((word, wordIndex) => {
-        if (!word) return;
-        
-        const wordChars = word.querySelectorAll('.char-reveal');
-        if (wordChars.length === 0) return;
-        
-        gsap.to(wordChars, {
-          opacity: 1,
-          y: "0%",
-          duration: 0.6,
-          stagger: 0.02,
-          ease: "power2.out",
-          delay: delay + (wordIndex * 0.1)
-        });
-      });
-    }
-    
-    function animateTextOut(split, direction = "up") {
-      if (!split || !split.words || split.words.length === 0) return;
-      
-      const yPos = direction === "up" ? "-20%" : "20%";
-      
-      split.words.forEach((word, wordIndex) => {
-        if (!word) return;
-        
-        const wordChars = word.querySelectorAll('.char-reveal');
-        if (wordChars.length === 0) return;
-        
-        gsap.to(wordChars, {
-          opacity: 0,
-          y: yPos,
-          duration: 0.4,
-          stagger: 0.02,
-          ease: "power2.out",
-          delay: wordIndex * 0.05
-        });
-      });
-    }
     
     // Create main scroll timeline
     const masterScroll = document.querySelector('.master-scroll');
@@ -256,78 +182,162 @@
     scrollWrappers.forEach((wrapper, index) => {
       if (!wrapper) return;
       
-      const split = textSplits[index];
+      const textElement = wrapper.querySelector('.text-h2');
       
       ScrollTrigger.create({
         trigger: masterScroll,
         start: `${(index / scrollWrappers.length) * 100}% center`,
         end: `${((index + 1) / scrollWrappers.length) * 100}% center`,
         toggleActions: "play reverse play reverse",
+        
         onEnter: () => {
-          // Fade in current wrapper
-          if (wrapper) {
-            gsap.to(wrapper, { opacity: 1, duration: 0.5, ease: "power2.out" });
+          // Kill any existing animations
+          gsap.killTweensOf(wrapper);
+          if (textElement) gsap.killTweensOf(textElement);
+          
+          // Animate current wrapper in
+          gsap.to(wrapper, { 
+            opacity: 1, 
+            duration: 0.6, 
+            ease: "power2.out",
+            overwrite: "auto"
+          });
+          
+          // Animate text scale and fade in
+          if (textElement) {
+            gsap.to(textElement, {
+              opacity: 1,
+              scale: 1,
+              duration: 2,
+              ease: "back.out(0.5)",
+              delay: 0.2,
+              overwrite: "auto"
+            });
           }
           
-          // Animate text in
-          if (split) {
-            animateTextIn(split, 0.2);
-          }
-          
-          // Fade out previous wrapper
+          // Hide previous wrapper
           if (index > 0) {
             const prevWrapper = scrollWrappers[index - 1];
-            const prevSplit = textSplits[index - 1];
+            const prevTextElement = prevWrapper?.querySelector('.text-h2');
             
             if (prevWrapper) {
-              gsap.to(prevWrapper, { opacity: 0, duration: 0.3, ease: "power2.out" });
+              gsap.killTweensOf(prevWrapper);
+              gsap.to(prevWrapper, { 
+                opacity: 0, 
+                duration: 0.4, 
+                ease: "power2.out",
+                overwrite: "auto"
+              });
             }
-            if (prevSplit) {
-              animateTextOut(prevSplit, "up");
+            
+            if (prevTextElement) {
+              gsap.killTweensOf(prevTextElement);
+              gsap.to(prevTextElement, {
+                opacity: 0,
+                scale: 0.9,
+                duration: 0.4,
+                ease: "power2.out",
+                overwrite: "auto"
+              });
             }
           }
         },
         
         onLeave: () => {
-          if (wrapper) {
-            gsap.to(wrapper, { opacity: 0, duration: 0.3, ease: "power2.out" });
-          }
-          if (split) {
-            animateTextOut(split, "up");
+          // Kill animations and hide
+          gsap.killTweensOf(wrapper);
+          if (textElement) gsap.killTweensOf(textElement);
+          
+          gsap.to(wrapper, { 
+            opacity: 0, 
+            duration: 0.4, 
+            ease: "power2.out",
+            overwrite: "auto"
+          });
+          
+          if (textElement) {
+            gsap.to(textElement, {
+              opacity: 0,
+              scale: 0.9,
+              duration: 0.4,
+              ease: "power2.out",
+              overwrite: "auto"
+            });
           }
         },
         
         onEnterBack: () => {
-          if (wrapper) {
-            gsap.to(wrapper, { opacity: 1, duration: 0.5, ease: "power2.out" });
-          }
-          if (split && split.chars) {
-            gsap.set(split.chars, { clearProps: "all" });
-            animateTextIn(split, 0.2);
+          // Kill animations
+          gsap.killTweensOf(wrapper);
+          if (textElement) gsap.killTweensOf(textElement);
+          
+          // Show current wrapper
+          gsap.to(wrapper, { 
+            opacity: 1, 
+            duration: 0.6, 
+            ease: "power2.out",
+            overwrite: "auto"
+          });
+          
+          if (textElement) {
+            gsap.to(textElement, {
+              opacity: 1,
+              scale: 1,
+              duration: 0.8,
+              ease: "back.out(1.2)",
+              delay: 0.2,
+              overwrite: "auto"
+            });
           }
           
           // Hide next wrapper
           if (index < scrollWrappers.length - 1) {
             const nextWrapper = scrollWrappers[index + 1];
-            const nextSplit = textSplits[index + 1];
+            const nextTextElement = nextWrapper?.querySelector('.text-h2');
             
             if (nextWrapper) {
-              gsap.to(nextWrapper, { opacity: 0, duration: 0.3, ease: "power2.out" });
+              gsap.killTweensOf(nextWrapper);
+              gsap.to(nextWrapper, { 
+                opacity: 0, 
+                duration: 0.4, 
+                ease: "power2.out",
+                overwrite: "auto"
+              });
             }
-            if (nextSplit && nextSplit.chars) {
-              gsap.set(nextSplit.chars, { clearProps: "all" });
-              animateTextOut(nextSplit, "down");
+            
+            if (nextTextElement) {
+              gsap.killTweensOf(nextTextElement);
+              gsap.to(nextTextElement, {
+                opacity: 0,
+                scale: 1.1,
+                duration: 0.4,
+                ease: "power2.out",
+                overwrite: "auto"
+              });
             }
           }
         },
         
         onLeaveBack: () => {
-          if (wrapper) {
-            gsap.to(wrapper, { opacity: 0, duration: 0.3, ease: "power2.out" });
-          }
-          if (split && split.chars) {
-            gsap.set(split.chars, { clearProps: "all" });
-            animateTextOut(split, "down");
+          // Kill animations and hide
+          gsap.killTweensOf(wrapper);
+          if (textElement) gsap.killTweensOf(textElement);
+          
+          gsap.to(wrapper, { 
+            opacity: 0, 
+            duration: 0.4, 
+            ease: "power2.out",
+            overwrite: "auto"
+          });
+          
+          if (textElement) {
+            gsap.to(textElement, {
+              opacity: 0,
+              scale: 1.1,
+              duration: 0.4,
+              ease: "power2.out",
+              overwrite: "auto"
+            });
           }
         }
       });
@@ -392,36 +402,36 @@
       }
     });
     
-    // Background color change
-// Background color changes per section
-const backgroundSection = document.querySelector('.section.base');
-if (backgroundSection) {
-  const sectionColors = [
-    '#FBF9EF','#F5F1E8','#EFE8D8','#E8DCC8','#E0D0B8',
-    '#D8C4A8','#D0B898','#C8AC88','#C0A078','#B89468',
-    '#B08858','#A87C48','#A07038','#986428'
-  ];
+    // Background color changes per section
+    const backgroundSection = document.querySelector('.section.base');
+    if (backgroundSection) {
+      const sectionColors = [
+        '#FBF9EF','#F5F1E8','#EFE8D8','#E8DCC8','#E0D0B8',
+        '#D8C4A8','#D0B898','#C8AC88','#C0A078','#B89468',
+        '#B08858','#A87C48','#A07038','#986428'
+      ];
 
-  // One timeline that spans the entire masterScroll
-  const tl = gsap.timeline({
-    defaults: { ease: "none" },
-    scrollTrigger: {
-      trigger: document.querySelector('.master-scroll'),
-      start: "top top",
-      end: "bottom bottom",
-      scrub: 1,
-      invalidateOnRefresh: true
+      // One timeline that spans the entire masterScroll
+      const tl = gsap.timeline({
+        defaults: { ease: "none" },
+        scrollTrigger: {
+          trigger: document.querySelector('.master-scroll'),
+          start: "top top",
+          end: "bottom bottom",
+          scrub: 1,
+          invalidateOnRefresh: true
+        }
+      });
+
+      // Evenly distribute the color steps across the timeline
+      const steps = sectionColors.length - 1;
+      gsap.set(backgroundSection, { backgroundColor: sectionColors[0] });
+      sectionColors.forEach((color, i) => {
+        if (i === 0) return;
+        tl.to(backgroundSection, { backgroundColor: color }, i / steps);
+      });
     }
-  });
-
-  // Evenly distribute the color steps across the timeline
-  const steps = sectionColors.length - 1;
-  gsap.set(backgroundSection, { backgroundColor: sectionColors[0] });
-  sectionColors.forEach((color, i) => {
-    if (i === 0) return;
-    tl.to(backgroundSection, { backgroundColor: color }, i / steps);
-  });
-}
+    
     // Refresh ScrollTrigger after DOM updates
     ScrollTrigger.refresh();
   }
@@ -500,10 +510,6 @@ if (backgroundSection) {
               <div class="w-full h-full"></div>
             {/if}
           </div>
-           
-       
-       
-       
         </div>
       </div>
     </div>
@@ -512,7 +518,6 @@ if (backgroundSection) {
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cabin:ital,wght@0,400..700;1,400..700&family=Martel+Sans:wght@200;300;400;600;700;800;900&family=Outfit:wght@100..900&display=swap');
-
 
   /* CSS Variables */
   :global(:root) {
@@ -538,7 +543,6 @@ if (backgroundSection) {
     z-index: 2;
     padding-top: var(--spacing-80);
     padding-bottom: var(--spacing-80);
-   
     position: relative;
   }
 
@@ -571,44 +575,6 @@ if (backgroundSection) {
     display: flex;
   }
 
-  .left-scroll-section {
-    max-width: 155px;
-  }
-
-  .right-scroll-section {
-    text-align: right;
-    max-width: 577px;
-    position: relative;
-  }
-
-  .label {
-    font-family: var(--font-ui);
-    font-size: 12px;
-    line-height: 133%;
-    font-weight: var(--font-weight-normal);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    justify-content: flex-start;
-    align-items: flex-end;
-  }
-
-  .text-scroll-right {
-    font-family: var(--font-heading-sans);
-    font-size: 40px;
-    line-height: 100%;
-    font-weight: var(--font-weight-medium);
-    letter-spacing: -1.5px;
-  }
-
-  .arrow-svg {
-    z-index: -1;
-    width: 340px;
-    max-width: none;
-    position: absolute;
-    top: 20px;
-    left: 85px;
-  }
-
   /* Master scroll styles */
   .master-scroll {
     position: relative;
@@ -639,7 +605,7 @@ if (backgroundSection) {
     align-items: center;
     display: flex;
     position: absolute;
-    will-change: transform, opacity;
+    will-change: opacity;
     max-width: 800px;
     padding: 0 20px;
   }
@@ -658,12 +624,8 @@ if (backgroundSection) {
     line-height: 110%;
     font-weight: var(--font-weight-normal);
     letter-spacing: -4px;
-  }
-
-  /* Animation-specific styles */
-  :global(.char-reveal) {
-    display: inline-block;
-    overflow: hidden;
+    will-change: transform, opacity;
+    transform-origin: center center;
   }
 
   /* SVG Icons */
@@ -730,27 +692,24 @@ if (backgroundSection) {
   /* Scroll images - All centered */
   .scroll-image-large {
     border-radius: var(--radius-3);
-     width: 432px;
-      height: 493px; /* Portrait ratio: 3:4 */
-      /* Simple centering with margin auto */
-      margin: 0 auto;
-      position: relative;
-      opacity: 0.9;
+    width: 432px;
+    height: 393px;
+    margin: 0 auto;
+    position: relative;
+    opacity: 0.9;
   }
 
   .scroll-image-large._1 {
     margin-top: 20vh;
-   
   }
 
   .scroll-image-large._2 {
     margin-top: 60vh;
-   
   }
 
   .scroll-image-large._3 {
     margin-top: 60vh;
-     rotate: -4deg;
+    rotate: -4deg;
   }
 
   .scroll-image-large._4 {
@@ -758,11 +717,9 @@ if (backgroundSection) {
     rotate: 4deg;
   }
 
-
   .scroll-image-large.heading-404 {
     margin-top: -80px;
   }
-
 
   .scroll-image-small {
     border-radius: var(--radius-3);
@@ -846,17 +803,6 @@ if (backgroundSection) {
       padding-bottom: 10.417vw;
     }
 
-    .text-scroll-right {
-      letter-spacing: -0.104vw;
-      font-size: 2.778vw;
-    }
-
-    .arrow-svg {
-      width: 23.611vw;
-      top: 1.389vw;
-      left: 5.903vw;
-    }
-
     .wave-svg, .eye-svg {
       width: 20vw;
     }
@@ -906,15 +852,6 @@ if (backgroundSection) {
       align-items: flex-end;
     }
 
-    .left-scroll-section {
-      text-align: right;
-    }
-
-    .arrow-svg {
-      width: 300px;
-      left: 148px;
-    }
-
     .text-h2 {
       font-size: 48px;
       letter-spacing: -2px;
@@ -926,9 +863,8 @@ if (backgroundSection) {
     }
 
     .scroll-image-large {
-       width: 232px;
-      height: 293px; /* Portrait ratio: 3:4 */
-      /* Simple centering with margin auto */
+      width: 232px;
+      height: 293px;
       margin: 0 auto;
       position: relative;
       opacity: 0.9;
@@ -966,16 +902,6 @@ if (backgroundSection) {
       padding-bottom: 80px;
     }
 
-    .text-scroll-right {
-      letter-spacing: -1px;
-      font-size: 28px;
-    }
-
-    .arrow-svg {
-      width: 220px;
-      left: 42px;
-    }
-
     .master-scroll {
       padding-top: 100px;
     }
@@ -997,7 +923,6 @@ if (backgroundSection) {
       font-size: 2em;
       letter-spacing: -1px;
       line-height: 110%;
-     
     }
 
     .scroll-wrapper-single {
@@ -1016,16 +941,11 @@ if (backgroundSection) {
 
     .scroll-image-large {
       width: 232px;
-      height: 293px; /* Portrait ratio: 3:4 */
-      /* Simple centering with margin auto */
+      height: 293px;
       margin: 0 auto;
       position: relative;
       opacity: 0.9;
-    
     }
-
-
-    
 
     .scroll-image-vertical {
       width: 132px;
