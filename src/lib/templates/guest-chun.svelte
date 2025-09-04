@@ -54,9 +54,9 @@
 
   // ─── Font Preloading ──────────────────────────────────────────────────────
   const FONTS_TO_PRELOAD = [
-    { family: 'SangBleu Regular', urls: ['/fonts/SangBleu-Regular.woff2', '/fonts/SangBleu-Regular.woff'] },
-    { family: 'Snell Roundhand', urls: ['/fonts/SnellRoundhand.woff2', '/fonts/SnellRoundhand.woff'] },
-    { family: 'DM Sans', urls: ['https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'] },
+    // { family: 'SangBleu Regular', urls: ['/fonts/SangBleu-Regular.woff2', '/fonts/SangBleu-Regular.woff'] },
+    // { family: 'Snell Roundhand', urls: ['/fonts/SnellRoundhand.woff2', '/fonts/SnellRoundhand.woff'] },
+    // { family: 'DM Sans', urls: ['https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'] },
     // { family: 'Millionaire_Roman', urls: ['/fonts/Millionaire-Roman.woff2', '/fonts/Millionaire-Roman.woff'] },
     // { family: 'Millionaire_Script', urls: ['/fonts/Millionaire-Script.woff2', '/fonts/Millionaire-Script.woff'] },
     // { family: 'SangBleu Light', urls: ['/fonts/SangBleu-Light.woff2', '/fonts/SangBleu-Light.woff'] }
@@ -64,7 +64,7 @@
 
   // ─── Static Images to Preload ─────────────────────────────────────────────
   const STATIC_IMAGES = [
-    '/cross.png',
+    // '/cross.png',
   ];
 
   // ─── Preloading Functions ─────────────────────────────────────────────────
@@ -809,16 +809,20 @@ function handleVisibilityChange() {
     // Add any analytics tracking here if needed
     window.open(url, '_blank', 'noopener,noreferrer');
   }
-  $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/${data.clientData?.slug || 'default'}/preview.webp`;
+$: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/${clientSlug}/preview.webp`;
   $: currentUrl = `https://startswithlove.com${$page.url.pathname}`;
+
 </script>
 
 <svelte:head>
+  <title>{invite.event_title || `${name1} & ${name2} Wedding Invitation`}</title>
   <meta property="og:image" content="{inviteImageUrl}" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:url" content="{currentUrl}" />
-    <meta property="og:type" content="website" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:url" content="{currentUrl}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image:alt" content="Wedding invitation for {name1} & {name2}" />
+  <meta property="og:locale" content="en_US" />
   <link rel="preload" as="image" href="/video-poster.webp" fetchpriority="high">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Preload critical fonts -->
