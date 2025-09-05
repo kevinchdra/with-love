@@ -105,16 +105,16 @@
   @reference "tailwindcss";
 
  
-  :global(html) {
+  :global(root) {
     background-color: theme(--color-gray-100);
     /* Define default fonts as fallback */
-    --font-display: 'Outfit', sans-serif;
-    --font-subheading: 'Fustat', sans-serif;
-    --font-button: 'Fustat', sans-serif;
-    --font-h3: 'Fustat', sans-serif;
-    --font-h2: 'Fustat', sans-serif;
-    --font-p: 'Fustat', sans-serif;
-    --font-smallcaption: 'Fustat', sans-serif;
+    --font-display: 'Recoleta R', serif;
+    --font-subheading: 'Recoleta R', serif;
+    --font-button: 'Recoleta R', serif;
+    --font-h3: 'Recoleta R', serif;
+    --font-h2: 'Recoleta R', serif;
+    --font-p: 'Recoleta R', serif;
+    --font-smallcaption: 'Recoleta L', serif;
   }
   
   
@@ -166,22 +166,18 @@
 }
 
 .font-h3.eventtime {
-  font-family: var(--font-h3);
+  font-family: 'Mabry Light',sans-serif;
   font-size: 1rem;
   margin-top: 4px;
   opacity: 90%;
 }
 
 .font-h2 {
-  font-family: var(--font-h2);
+  font-family: 'Recoleta R', serif;
   font-size: 1.75rem;
   letter-spacing: 0.050em;
 }
 
-.font-h2.countdown {
-  font-family: var(--font-h2);
-  font-size: 2.5rem;
-}
 
 .font-p {
   font-family: var(--font-p);

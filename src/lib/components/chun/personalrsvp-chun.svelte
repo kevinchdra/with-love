@@ -374,19 +374,20 @@ const sendEmail = async () => {
 </script>
 
 <style lang="postcss">
-  @import url('https://fonts.googleapis.com/css2?family=Fustat:wght@200..800&family=Martel+Sans:wght@200;300;400;600;700;800;900&family=Outfit:wght@100..900&display=swap');  
+
   @reference "tailwindcss";
-    
- :global(html) {
+  
+  
+  :global(:root) {
     background-color: theme(--color-gray-100);
     /* Define default fonts as fallback */
-    --font-display: 'Outfit', sans-serif;
-    --font-subheading: 'Fustat', sans-serif;
-    --font-button: 'Fustat', sans-serif;
-    --font-h3: 'Fustat', sans-serif;
-    --font-h2: 'Fustat', sans-serif;
-    --font-p: 'Fustat', sans-serif;
-    --font-smallcaption: 'Fustat', sans-serif;
+    --font-display: 'Recoleta R', serif;
+    --font-subheading: 'Recoleta R', serif;
+    --font-button: 'Recoleta R', serif;
+    --font-h3: 'Mabry Light', serif;
+    --font-h2: 'Mabry Light', serif;
+    --font-p: 'Mabry Light', serif;
+    --font-smallcaption: 'Mabry Light', serif;
   }
   
   
@@ -445,7 +446,7 @@ const sendEmail = async () => {
   }
 
 .font-h2 {
-    font-family: var(--font-h2);
+    font-family: 'Recoleta L', serif;
     font-size: 1.75rem;
     letter-spacing: 0.050em;
   }

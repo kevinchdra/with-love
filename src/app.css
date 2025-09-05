@@ -1,6 +1,26 @@
 @import "tailwindcss";
 
 @font-face{
+  font-family: 'Recoleta Regular';
+  src: url('/fonts/Recoleta-Regular.otf') format('opentype');
+  font-weight: 400;
+}
+
+@font-face{
+  font-family: 'Recoleta Medium';
+  src: url('/fonts/Recoleta-Regular.otf') format('opentype');
+  font-weight: 500;
+}
+
+@font-face{
+  font-family: 'Recoleta Light';
+  src: url('/fonts/Recoleta-Regular.otf') format('opentype');
+  font-weight: 300;
+}
+
+
+
+@font-face{
   font-family: 'DM Sans ExtraBold';
   src: url('/fonts/DMSans-ExtraBold.ttf') format('truetype');
   font-weight: 800;
@@ -67,29 +87,4 @@
   src: url('/fonts/Romie-Regular.otf') format('otf');
   font-weight: 400;
   font-style: normal;
-}
-
-@theme {
-    --color-deepred:rgba(156, 0, 0, 1);
-
-    --breakpoint-xs: 23rem;
-}
-
-@layer utilities {
- 
-
-  .font-countdowntime{
-    font-family:"Inter", ui-sans-serif, system-ui, sans-serif;
-    font-size:3rem;
-    color:beige;
-  }
-  .font-countdowncap{
-    font-family:"Inter", ui-sans-serif, system-ui, sans-serif;
-    font-size:0.8rem;
-    color:beige;
-    letter-spacing: 0.1em;
-  }
-
- 
-
 }

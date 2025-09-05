@@ -12,10 +12,8 @@
   import { supabase } from '$lib/supabaseClient';
   import { fade } from 'svelte/transition';
   import Lenis from '@studio-freight/lenis';
-  import { gsap } from 'gsap';
-  import { ScrollTrigger } from 'gsap/ScrollTrigger';
-  import Parallax from '$lib/components/chun/Parallax.svelte'
-
+   import { gsap } from 'gsap'
+  import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
    gsap.registerPlugin(ScrollTrigger)
 
@@ -43,10 +41,12 @@
   let isLoading = true;
   let loadingProgress = 0;
   let loadingStatus = 'Initializing...';
-
+  // Background image tracking
+  let currentBgIndex = 0;
   let showAccount = true;
   let clicked = false;
-
+  let carouselStarted = false;
+  let section;
   let copiedAccounts = {}; // store which account numbers have been copied
 
   // ─── Google Maps Integration ──────────────────────────────────────────────
@@ -54,9 +54,13 @@
 
   // ─── Font Preloading ──────────────────────────────────────────────────────
   const FONTS_TO_PRELOAD = [
-    // { family: 'SangBleu Regular', urls: ['/fonts/SangBleu-Regular.woff2', '/fonts/SangBleu-Regular.woff'] },
-    // { family: 'Snell Roundhand', urls: ['/fonts/SnellRoundhand.woff2', '/fonts/SnellRoundhand.woff'] },
-    // { family: 'DM Sans', urls: ['https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'] },
+    { family: 'Mabry Light', urls: ['/fonts/mabry-light.ttf']},
+    { family: 'Mabry Medium', urls: ['/fonts/mabry-medium.ttf']},
+    { family: 'Mabry Regular', urls: ['/fonts/mabry-regular.ttf']},
+    { family: 'Recoleta L', urls: ['/fonts/Recoleta-Light.otf']},
+    { family: 'Recoleta R', urls: ['/fonts/Recoleta-Regular.otf']},
+    { family: 'Recoleta M', urls: ['/fonts/Recoleta-Medium.otf']},
+    { family: 'DM Sans', urls: ['https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'] },
     // { family: 'Millionaire_Roman', urls: ['/fonts/Millionaire-Roman.woff2', '/fonts/Millionaire-Roman.woff'] },
     // { family: 'Millionaire_Script', urls: ['/fonts/Millionaire-Script.woff2', '/fonts/Millionaire-Script.woff'] },
     // { family: 'SangBleu Light', urls: ['/fonts/SangBleu-Light.woff2', '/fonts/SangBleu-Light.woff'] }
@@ -64,7 +68,7 @@
 
   // ─── Static Images to Preload ─────────────────────────────────────────────
   const STATIC_IMAGES = [
-    // '/cross.png',
+    '/cross.png',
   ];
 
   // ─── Preloading Functions ─────────────────────────────────────────────────
@@ -120,8 +124,9 @@
 
  
 
-  async function preloadAllAssets() {
-  const totalSteps = 2; // Only fonts and video now
+ // Modified preloadAllAssets function
+async function preloadAllAssets() {
+  const totalSteps = 3;
   let currentStep = 0;
 
   try {
@@ -142,6 +147,14 @@
     await loadSupabaseVideo();
     
     currentStep++;
+    loadingProgress = (currentStep / totalSteps) * 100;
+
+    // Step 3: Preload just first image (much faster)
+    loadingStatus = 'Almost Ready';
+    
+    await preloadFirstImage(); // Changed from preloadFirstTwoImages
+    
+    currentStep++;
     loadingProgress = 100;
 
     // Small delay to show completion
@@ -150,37 +163,33 @@
     loadingStatus = 'Complete!';
     isLoading = false;
 
-    // Load images in background AFTER loading screen is done (non-blocking)
+    // Load remaining images in background AFTER loading screen is done
     setTimeout(() => {
-      loadSupabaseImages(); // No await - runs in background
+      loadRemainingImages(); // This will add more images and start carousel
     }, 100);
 
   } catch (error) {
     console.error('Error during preloading:', error);
-    // Still proceed even if some assets fail
     isLoading = false;
     
-    // Still try to load images in background even if other preloading failed
     setTimeout(() => {
-      loadSupabaseImages();
+      loadRemainingImages();
     }, 100);
   }
 }
-
-
 
   // ─── Improved Google Calendar Integration ─────────────────────────────────
   
   /**
    * Converts a Date object to Google Calendar format (YYYYMMDDTHHMMSSZ)
    */
-  function toGoogleCalendarDate(date) {
-    if (!date || isNaN(date.getTime())) {
-      console.error('Invalid date provided to toGoogleCalendarDate:', date);
-      return '';
-    }
-    return date.toISOString().replace(/-|:|\.\d\d\d/g, '');
-  }
+  // function toGoogleCalendarDate(date) {
+  //   if (!date || isNaN(date.getTime())) {
+  //     console.error('Invalid date provided to toGoogleCalendarDate:', date);
+  //     return '';
+  //   }
+  //   return date.toISOString().replace(/-|:|\.\d\d\d/g, '');
+  // }
 
   //Parse Wedding Gift Note
   function parseFormatting(text) {
@@ -319,103 +328,117 @@ function createCalendarUrl(event) {
   let audio;
   let audioUrl = '';
   let audioStarted = false;
-
+   let backgroundImageUrl = '';
   // ─── Supabase Asset Loading ───────────────────────────────────────────────
   async function loadSupabaseVideo() {
-  try {
-    // Get video URL
-    const { data: videoData, error: videoError } = supabase
-      .storage
-      .from('invites-images')
-      .getPublicUrl(`${clientSlug}/video.webm`);
+    try {
+      // Get video URL
+      const { data: videoData, error: videoError } = supabase
+        .storage
+        .from('invites-images')
+        .getPublicUrl(`${clientSlug}/video.webm`);
 
-    if (videoError) {
-      console.error('Error getting video public URL:', videoError);
-    } else {
-      videoUrl = videoData.publicUrl;
-      console.log('Video URL:', videoUrl);
-    }
+      if (videoError) {
+        console.error('Error getting video public URL:', videoError);
+      } else {
+        videoUrl = videoData.publicUrl;
+        console.log('Video URL:', videoUrl);
+      }
 
-    // Get poster URL  
-    const { data: posterData, error: posterError } = supabase
-      .storage
-      .from('invites-images')
-      .getPublicUrl(`${clientSlug}/video-poster.webp`);
+      // Get poster URL  
+      const { data: posterData, error: posterError } = supabase
+        .storage
+        .from('invites-images')
+        .getPublicUrl(`${clientSlug}/video-poster.webp`);
 
-    if (posterError) {
-      console.warn('No poster image found:', posterError);
-      // Poster is optional, so don't throw error
-    } else {
-      posterUrl = posterData.publicUrl;
-      console.log('Poster URL:', posterUrl);
-    }
-    
-    // Get audio URL
-    const { data: audioData, error: audioError } = supabase
-      .storage
-      .from('invites-images')
-      .getPublicUrl(`${clientSlug}/bgm.mp3`);
+      if (posterError) {
+        console.warn('No poster image found:', posterError);
+      } else {
+        posterUrl = posterData.publicUrl;
+        console.log('Poster URL:', posterUrl);
+      }
 
-    if (audioError) {
+      // Get background image URL - ADD THIS
+      const { data: backgroundData, error: backgroundError } = supabase
+        .storage
+        .from('invites-images')
+        .getPublicUrl(`${clientSlug}/background.webp`);
+
+      if (backgroundError) {
+        console.warn('No background image found:', backgroundError);
+      } else {
+        backgroundImageUrl = backgroundData.publicUrl;
+        console.log('Background URL:', backgroundImageUrl);
+      }
+      
+      // Get audio URL
+      const { data: audioData, error: audioError } = supabase
+        .storage
+        .from('invites-images')
+        .getPublicUrl(`${clientSlug}/bgm.mp3`);
+
+      if (audioError) {
+        audioUrl = '/sailorsong-bgm.mp3';
+      } else {
+        audioUrl = audioData.publicUrl;
+      }
+      
+      // Preload video, poster, background, and audio
+      const promises = [];
+      
+      if (videoUrl) {
+        promises.push(preloadVideo(videoUrl));
+      }
+      
+      if (posterUrl) {
+        promises.push(preloadImage(posterUrl));
+      }
+
+      // Preload background image - ADD THIS
+      if (backgroundImageUrl) {
+        promises.push(preloadImage(backgroundImageUrl));
+      }
+
+      if (audioUrl && audioUrl !== '/sailorsong-bgm.mp3') {
+        promises.push(preloadAudio(audioUrl));
+      }
+      
+      await Promise.allSettled(promises);
+
+      setTimeout(() => {
+        if (audio && audioUrl) {
+          audio.src = audioUrl;
+          audio.loop = true;
+          audio.muted = true;
+          audio.load();
+        }
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error loading video assets:', error);
       audioUrl = '/sailorsong-bgm.mp3';
-    } else {
-      audioUrl = audioData.publicUrl;
+      setTimeout(() => {
+        if (audio && audioUrl) {
+          audio.src = audioUrl;
+          audio.loop = true;
+          audio.muted = true;
+          audio.load();
+        }
+      }, 500);
     }
-    
-    
-    // Preload video (and poster if it exists)
-    const promises = [];
-    
-    if (videoUrl) {
-      promises.push(preloadVideo(videoUrl));
-    }
-    
-    if (posterUrl) {
-      promises.push(preloadImage(posterUrl)); // Preload poster as image
-    }
-
-    if (audioUrl && audioUrl !== '/sailorsong-bgm.mp3') {
-      promises.push(preloadAudio(audioUrl));
-    }
-    
-    
-    await Promise.allSettled(promises);
-
-     setTimeout(() => {
-      if (audio && audioUrl) {
-        audio.src = audioUrl;
-        audio.loop = true;
-        audio.muted = true; // Start muted for autoplay compliance
-        audio.load();
-      }
-    }, 500);
-    
-  } catch (error) {
-    console.error('Error loading video assets:', error);
-    console.error('Error loading assets:', error);
-    audioUrl = '/sailorsong-bgm.mp3';
-    setTimeout(() => {
-      if (audio && audioUrl) {
-        audio.src = audioUrl;
-        audio.loop = true;
-        audio.muted = true;
-        audio.load();
-      }
-    }, 500);
   }
-}
   //Carousel for countdown
   let images = [];
   let currentIndex = 0;
 
-async function loadSupabaseImages() {
+async function preloadFirstImage() {
   try {
-    console.log('🖼️ Loading images in background...');
+    console.log('🖼️ Preloading first image...');
     
     const { data, error } = await supabase
       .storage
       .from('invites-images')
-      .list(clientSlug, { limit: 100 });
+      .list(clientSlug, { limit: 10 }); // Reduced limit for faster API response
       
     if (error) {
       console.error('Error listing images:', error);
@@ -427,21 +450,89 @@ async function loadSupabaseImages() {
       return;
     }
    
-    // Only include numbered image files (1.jpg, 2.png, etc.) - exclude video-poster
+    // Filter and sort images (same logic as before)
     const sorted = data
       .filter(file => {
-        // Must be an image file
         const isImage = /\.(jpe?g|png|webp)$/i.test(file.name);
-        // Must start with a number (for carousel images)
         const startsWithNumber = /^\d+\./i.test(file.name);
-        
         return isImage && startsWithNumber;
       })
       .sort((a, b) => parseInt(a.name) - parseInt(b.name));
 
     console.log('Filtered carousel images:', sorted.map(f => f.name));
 
-    const imageUrls = sorted.map(file => {
+    if (sorted.length === 0) return;
+
+    // Get URL for ONLY the first image
+    const firstFile = sorted[0]; // Just the first one
+    const { data: publicData } = supabase
+      .storage
+      .from('invites-images')
+      .getPublicUrl(`${clientSlug}/${firstFile.name}`);
+    
+    const firstImageUrl = publicData.publicUrl;
+
+    console.log(`Preloading first image: ${firstImageUrl}`);
+
+    // Preload just the first image
+    try {
+      const loadedImage = await preloadImage(firstImageUrl);
+      
+      // Set the images array with just the first image
+      images = [loadedImage];
+      
+      console.log('✅ First image preloaded and ready');
+      
+      // Don't start carousel yet - just show the static image
+      // startCarousel(); // Remove this line
+      
+    } catch (error) {
+      console.warn(`Failed to preload first image: ${firstImageUrl}`, error);
+    }
+
+  } catch (error) {
+    console.error('Error preloading first image:', error);
+  }
+}
+
+// Modified function to load remaining images
+async function loadRemainingImages() {
+  try {
+    console.log('🖼️ Loading remaining images in background...');
+    
+    const { data, error } = await supabase
+      .storage
+      .from('invites-images')
+      .list(clientSlug, { limit: 100 });
+      
+    if (error) {
+      console.error('Error listing remaining images:', error);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      console.warn(`No files found in folder: ${clientSlug}`);
+      return;
+    }
+   
+    // Filter and sort images
+    const sorted = data
+      .filter(file => {
+        const isImage = /\.(jpe?g|png|webp)$/i.test(file.name);
+        const startsWithNumber = /^\d+\./i.test(file.name);
+        return isImage && startsWithNumber;
+      })
+      .sort((a, b) => parseInt(a.name) - parseInt(b.name));
+
+    // Skip first image (already loaded)
+    const remainingFiles = sorted.slice(1);
+    
+    if (remainingFiles.length === 0) {
+      console.log('No remaining images to load');
+      return;
+    }
+
+    const imageUrls = remainingFiles.map(file => {
       const { data: publicData } = supabase
         .storage
         .from('invites-images')
@@ -449,45 +540,37 @@ async function loadSupabaseImages() {
       return publicData.publicUrl;
     });
 
-    console.log(`Found ${imageUrls.length} carousel images to load`);
+    console.log(`Loading ${imageUrls.length} remaining images in background`);
 
-    if (imageUrls.length === 0) return;
-
-    // Initialize empty array
-    let loadedImages = [];
+    // Load remaining images one by one
+    let currentImages = [...images]; // Copy current images (should have 1 image)
     
-    // Load first image quickly to start carousel
-    try {
-      const firstImage = await preloadImage(imageUrls[0]);
-      loadedImages = [firstImage];
-      images = loadedImages; // Trigger Svelte reactivity
-      console.log('✅ First carousel image loaded, starting carousel');
-      startCarousel();
-    } catch (error) {
-      console.warn('Failed to load first carousel image:', error);
-    }
-
-    // Load remaining images in background
-    if (imageUrls.length > 1) {
-      for (let i = 1; i < imageUrls.length; i++) {
-        try {
-          const loadedImage = await preloadImage(imageUrls[i]);
-          loadedImages = [...loadedImages, loadedImage]; // Create new array
-          images = loadedImages; // Trigger Svelte reactivity
-          console.log(`✅ Loaded carousel image ${i + 1}/${imageUrls.length}`);
-          
-          // Small delay to prevent overwhelming the browser
-          await new Promise(resolve => setTimeout(resolve, 100));
-        } catch (error) {
-          console.warn(`Failed to load carousel image ${i + 1}:`, error);
+    for (let i = 0; i < imageUrls.length; i++) {
+      try {
+        const loadedImage = await preloadImage(imageUrls[i]);
+        currentImages = [...currentImages, loadedImage];
+        images = currentImages; // Trigger Svelte reactivity
+        
+        // Start carousel when we have 2+ images
+        if (currentImages.length === 2 && !carouselStarted) {
+          console.log('✅ Starting carousel with 2 images');
+          startCarousel();
+          carouselStarted = true; // Add this flag to prevent multiple starts
         }
+        
+        console.log(`✅ Loaded additional image ${i + 1}/${imageUrls.length}`);
+        
+        // Small delay to prevent overwhelming the browser
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.warn(`Failed to load remaining image ${i + 1}:`, error);
       }
     }
 
     console.log(`🎉 Finished loading ${images.length} total carousel images`);
     
   } catch (error) {
-    console.error('Error loading Supabase images:', error);
+    console.error('Error loading remaining images:', error);
   }
 }
 
@@ -535,25 +618,128 @@ function preloadAudio(src) {
     }
   }
 
-
-function hideBrowserChrome() {
-  // Scroll down by 1px to trigger browser UI hiding
-  window.scrollTo(0, 1);
+  const lines = [
+    "By the time you read this,",
+    "our wedding day will already be drawing near.",
+    "We used to think a wedding was simply a formality,",
+    "but now we know, it is a rare and precious gathering,",
+    "a journey of love from miles away,",
+    "a gift of presence we will forever treasure.",
+    "In a lifetime of more than 30,000 days,",
+    "what moves us most,",
+    "is that you've chosen to spend this one day with us.",
+    "This day,",
+    "our wedding day,",
+    "will forever be extraordinary,",
+    "because you have chosen to share it with us.",
+    "Your presence is the greatest blessing,",
+    "a reminder that love is not just between two people,",
+    "but carried and strengthened by the hearts around them.",
+    "Thank you for coming,",
+    "thank you for standing by us.",
+    "It's been a while but we can't wait to see you at the wedding.",
+  ];
   
-  // Alternative: Use smooth scroll
-  // window.scrollTo({ top: 1, behavior: 'smooth' });
-}
 
-  onMount(async () => {
-    setTimeout(hideBrowserChrome, 100)
+
+
+onMount(async () => {
   // Start preloading immediately
   await preloadAllAssets();
   
-
   updateCountdown();
   intervalTime = setInterval(updateCountdown, 1000);
 
-  // ─── BGM Autoplay After Interaction ─────
+  // ─── Enhanced BGM Autoplay with Better Mobile Support ─────
+  let interactionAttempted = false;
+  let playPromiseInProgress = false;
+  
+  // Function to attempt audio play with better mobile support
+  function attemptAudioPlay() {
+    if (!audio || !audio.src || audioStarted || interactionAttempted || playPromiseInProgress) return;
+    
+    console.log('🎵 Attempting to play audio...');
+    interactionAttempted = true;
+    playPromiseInProgress = true;
+    
+    // Ensure audio is ready
+    if (audio.readyState < 2) {
+      console.log('🎵 Audio not ready, waiting...');
+      audio.addEventListener('canplay', attemptAudioPlay, { once: true });
+      playPromiseInProgress = false;
+      interactionAttempted = false;
+      return;
+    }
+    
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          console.log('🎵 Audio started successfully');
+          fadeInAudio();
+          audioStarted = true;
+          playPromiseInProgress = false;
+          // Remove all listeners after successful play
+          removeAudioListeners();
+        })
+        .catch((error) => {
+          console.log('🎵 Audio autoplay failed:', error.message);
+          playPromiseInProgress = false;
+          interactionAttempted = false; // Reset to allow retry
+          // Keep listeners active for retry
+        });
+    } else {
+      playPromiseInProgress = false;
+    }
+  }
+  
+  // Function to remove all audio event listeners
+  function removeAudioListeners() {
+    window.removeEventListener("scroll", handleFirstInteraction);
+    window.removeEventListener("mousemove", handleFirstInteraction);
+    window.removeEventListener("click", handleFirstInteraction);
+    window.removeEventListener("touchstart", handleFirstInteraction);
+    window.removeEventListener("touchend", handleFirstInteraction);
+    window.removeEventListener("keydown", handleFirstInteraction);
+    window.removeEventListener("pointerdown", handleFirstInteraction);
+    document.removeEventListener("gesturestart", handleFirstInteraction);
+  }
+  
+  // Enhanced interaction handler
+  function handleFirstInteraction(event) {
+    console.log('🎵 User interaction detected:', event.type);
+    
+    // Small delay to ensure the interaction is complete
+    setTimeout(() => {
+      attemptAudioPlay();
+    }, 100);
+  }
+  
+  // Add comprehensive interaction listeners
+  const interactionEvents = [
+    'click',
+    'touchstart', 
+    'touchend',
+    'pointerdown',
+    'keydown',
+    'scroll'
+  ];
+  
+  interactionEvents.forEach(eventType => {
+    window.addEventListener(eventType, handleFirstInteraction, { 
+      passive: true, 
+      once: false 
+    });
+  });
+  
+  // iOS Safari specific gesture event
+  document.addEventListener('gesturestart', handleFirstInteraction, { 
+    passive: true, 
+    once: false 
+  });
+ 
+
+  // // ─── BGM Autoplay After Interaction ─────
   window.addEventListener('scroll', playAudio, { once: true });
   window.addEventListener('mousemove', playAudio, { once: true });
   window.addEventListener('click', playAudio, { once: true });
@@ -572,13 +758,125 @@ function hideBrowserChrome() {
   );
 
   // Lenis smooth scroll (keep your existing setup)
-  const lenis = new Lenis({ smoothWheel: true, wheelMultiplier: 0.4,  lerp: 0.05})
+  const lenis = new Lenis()
   function raf(time) {
     lenis.raf(time)
     requestAnimationFrame(raf)
   }
   requestAnimationFrame(raf)
 
+
+
+// GETTY EFFECT: Pin storytelling container
+const storytellingContainer = document.querySelector('.storytelling-container');
+if (storytellingContainer) {
+  const scrollIndicator = document.querySelector('.scroll-indicator');
+  const progressBar = document.querySelector('.story-progress-bar');
+  const progressFill = document.querySelector('.story-progress-fill');
+  
+  const tl = gsap.timeline({
+    scrollTrigger: {
+      trigger: ".storytelling-container",
+      start: "top top",
+      end: `+=${lines.length * 1200}`, 
+      scrub: 1,
+      pin: true,
+      anticipatePin: 1,
+      onUpdate: (self) => {
+        // Update progress bar
+        if (progressFill) {
+          progressFill.style.width = `${self.progress * 100}%`;
+        }
+        
+        // Show/hide progress bar
+        if (progressBar) {
+          if (self.progress > 0.01) {
+            progressBar.classList.add('visible');
+          } else {
+            progressBar.classList.remove('visible');
+          }
+        }
+        
+        // Handle scroll indicator
+        if (scrollIndicator) {
+          if (self.progress > 0.05) {
+            scrollIndicator.classList.add('hidden');
+          } else {
+            scrollIndicator.classList.remove('hidden');
+          }
+        }
+      },
+      onLeave: () => {
+        // Hide progress bar when leaving storytelling section
+        if (progressBar) {
+          progressBar.classList.remove('visible');
+        }
+      }
+    }
+  });
+
+  // Initialize all lines as hidden except the first one
+  lines.forEach((_, i) => {
+    if (i === 0) {
+      gsap.set(`.story-line-${i}`, { opacity: 1, y: 0, scale: 1 });
+    } else {
+      gsap.set(`.story-line-${i}`, { opacity: 0, y: 20, scale: 0.95 });
+    }
+  });
+
+
+
+  // Create line-by-line animations
+  lines.forEach((_, i) => {
+    if (i < lines.length - 1) {
+      // Hide scroll indicator on first transition
+      if (i === 0 && scrollIndicator) {
+        tl.to(scrollIndicator, {
+          opacity: 0,
+          duration: 0.3
+        }, `line${i + 1}`);
+      }
+
+      // Change background every 2 lines
+     if (i > 0 && i % 2 === 0) {
+  tl.add(() => {
+    // Only change if we have images loaded
+    if (images.length > 0) {
+      currentBgIndex = (currentBgIndex + 1) % images.length;
+      console.log(`GSAP: Changing background to index ${currentBgIndex}, image: ${images[currentBgIndex]}`);
+      
+      // Force Svelte reactivity by creating a new assignment
+      currentBgIndex = currentBgIndex;
+    }
+  }, `line${i + 1}`);
+}
+      
+      // Fade out current line
+      tl.to(`.story-line-${i}`, { 
+        opacity: 0, 
+        y: -20, 
+        scale: 0.95, 
+        duration: 0.8 
+      }, `line${i + 1}`)
+      
+      // Fade in next line
+      .to(`.story-line-${i + 1}`, {
+        opacity: 1, 
+        y: 0, 
+        scale: 1, 
+        duration: 1 
+      }, `line${i + 1}+=0.2`);
+    }
+  });
+
+  // Hold last line briefly then fade out
+  tl.to(`.story-line-${lines.length - 1}`, { 
+    opacity: 0, 
+    y: -20, 
+    scale: 0.95, 
+    duration: 1 
+  }, "+=1");
+}
   const fadeElements = document.querySelectorAll('.fade-in');
   fadeElements.forEach(el => observer.observe(el));
 });
@@ -638,30 +936,30 @@ function handleVisibilityChange() {
 }
 
   // ─── Scroll to Devotions Section ─────────────────────────────────────────
-//   function unlockScrollAndScrollDown() {
-//     const targetY = window.innerHeight;
-//     const startY = window.pageYOffset;
-//     const distance = targetY - startY;
-//     const duration = 1000; // milliseconds
-//     let startTime = null;
+  function unlockScrollAndScrollDown() {
+    const targetY = window.innerHeight;
+    const startY = window.pageYOffset;
+    const distance = targetY - startY;
+    const duration = 1000; // milliseconds
+    let startTime = null;
 
-//     function smoothScroll(currentTime) {
-//       if (startTime === null) startTime = currentTime;
-//       const timeElapsed = currentTime - startTime;
-//       const progress = Math.min(timeElapsed / duration, 1);
+    function smoothScroll(currentTime) {
+      if (startTime === null) startTime = currentTime;
+      const timeElapsed = currentTime - startTime;
+      const progress = Math.min(timeElapsed / duration, 1);
       
-//       // Ease-out function for smooth deceleration
-//       const ease = 1 - Math.pow(1 - progress, 3);
+      // Ease-out function for smooth deceleration
+      const ease = 1 - Math.pow(1 - progress, 3);
       
-//       window.scrollTo(0, startY + (distance * ease));
+      window.scrollTo(0, startY + (distance * ease));
       
-//       if (progress < 1) {
-//         requestAnimationFrame(smoothScroll);
-//       }
-//     }
+      if (progress < 1) {
+        requestAnimationFrame(smoothScroll);
+      }
+    }
     
-//     requestAnimationFrame(smoothScroll);
-//   }
+    requestAnimationFrame(smoothScroll);
+  }
 
   // ─── Account Copy ─────────────────────────────────────────────────────────
   async function copyAccountNumber(number) {
@@ -809,21 +1107,40 @@ function handleVisibilityChange() {
     // Add any analytics tracking here if needed
     window.open(url, '_blank', 'noopener,noreferrer');
   }
-$: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/${clientSlug}/preview.webp`;
+
+  $: inviteImageUrl = `https://your-supabase-url.supabase.co/storage/v1/object/public/invites-images/${data.clientData?.slug || 'default'}/preview.webp`;
   $: currentUrl = `https://startswithlove.com${$page.url.pathname}`;
+$: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgIndex === 'number') {
+  setTimeout(() => {
+    const bgSlides = document.querySelectorAll('.bg-slide');
+    console.log(`Reactive: Found ${bgSlides.length} bg-slides, currentBgIndex: ${currentBgIndex}, images.length: ${images.length}`);
+    
+    if (bgSlides.length > 0 && currentBgIndex < images.length) {
+      bgSlides.forEach((slide, index) => {
+        if (index === currentBgIndex) {
+          slide.classList.add('active');
+          console.log(`✅ Activated slide ${index}`);
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+    }
+  }, 50);
+}
 
 </script>
 
 <svelte:head>
-  <title>{invite.event_title || `${name1} & ${name2} Wedding Invitation`}</title>
   <meta property="og:image" content="{inviteImageUrl}" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="{currentUrl}" />
-  <meta property="og:type" content="website" />
-  <meta property="og:image:alt" content="Wedding invitation for {name1} & {name2}" />
-  <meta property="og:locale" content="en_US" />
-  <link rel="preload" as="image" href="/video-poster.webp" fetchpriority="high">
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="{currentUrl}" />
+    <meta property="og:type" content="website" />
+    <link rel="preload" as="image" href={images[0]} fetchpriority="high">
+
+    <link rel="preload" as="image" href={backgroundImageUrl} fetchpriority="high">
+
+
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Preload critical fonts -->
   {#each FONTS_TO_PRELOAD as font}
@@ -842,16 +1159,58 @@ $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/
 <style lang="postcss">
   @reference "tailwindcss";
 
+  :global(:root) {
+  /* Font Family Variables */
+
+  --font-display: 'Recoleta',serif;
+        /* Display font */
+  --font-heading: 'Mabry Medium', sans-serif;  /* Headings */
+  --font-body: 'Mabry Regular', sans-serif;    /* Body text */
+  --font-light: 'Mabry Light', sans-serif;     /* Light text */
+  --font-dm-sans: 'DM Sans', sans-serif;       /* Buttons/UI */
+
+  /* Font Size Variables */
+  --font-size-subheading: 0.75rem;
+  --font-size-display: 4.75rem;
+  --font-size-display-dresscode: 2.25rem;
+  --font-size-button: 0.75rem;
+  --font-size-h3: 1.25rem;
+  --font-size-h3-eventtime: 1rem;
+  --font-size-h2: 1.75rem;
+  --font-size-h2-countdown: 2.5rem;
+  --font-size-p: 1.75rem;
+  --font-size-smallcaption: 0.75rem;
+  --font-size-with-love: 0.65rem;
+
+  /* Letter Spacing Variables */
+  --letter-spacing-subheading: 0.25em;
+  --letter-spacing-h3: 0.025em;
+  --letter-spacing-h2: 0.050em;
+  --letter-spacing-smallcaption: 0.25em;
+  --letter-spacing-with-love: 0.3em;
+
+  /* Desktop Font Sizes */
+  --font-size-display-desktop: 6.55rem;
+  --font-size-subheading-desktop: 0.85rem;
+}
+
+@media (max-width: 376px) {
+  :global(:root) {
+    --font-size-subheading: 0.65rem;
+    --font-size-display: 4.55rem;
+    --font-size-display-dresscode: 2.15rem;
+    --font-size-button: 0.65rem;
+    --font-size-h3: 1.15rem;
+    --font-size-h3-eventtime: 0.9rem;
+    --font-size-h2: 1.65rem;
+    --font-size-h2-countdown: 2.4rem;
+    --font-size-p: 1.65rem;
+    --font-size-smallcaption: 0.65rem;
+  }
+}
+
   :global(html) {
-    background-color: #000000;
-    /* Define default fonts as fallback */
-    --font-display: 'Outfit', sans-serif;
-    --font-subheading: 'Fustat', sans-serif;
-    --font-button: 'Fustat', sans-serif;
-    --font-h3: 'Fustat', sans-serif;
-    --font-h2: 'Fustat', sans-serif;
-    --font-p: 'Fustat', sans-serif;
-    --font-smallcaption: 'Fustat', sans-serif;
+    background-color: #000;
   }
   
   :global(body) {
@@ -874,84 +1233,250 @@ $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/
     transform: translateY(0);
   }
 
-  .font-subheading {
-    font-family: var(--font-subheading);
-    font-size: 0.75rem;
-    letter-spacing: 0.25em;
-  }
+  /* Progress Bar Styles */
+.story-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  z-index: 50;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
 
-  .font-subheading.loading {
-    font-family: var(--font-subheading);
-    font-size: 0.75rem;
-  }
+.story-progress-bar.visible {
+  opacity: 1;
+}
 
-  .font-display {
-    font-family: var(--font-display);
-    font-size: 4.75rem;
-  }
+.story-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 1));
+  width: 0%;
+  transition: width 0.1s ease-out;
+}
 
-  .font-display.dresscode{
-    font-family: var(--font-display);
-    font-size: 2.25rem;
-  }
+  /* Getty Effect Storytelling Styles */
+  .storytelling-container {
+    height: 100vh;
+    width: 100%;
+    position: relative;
+    background: transparent; /* Let video background show through */
+    overflow: hidden;
 
-  .font-button {
-    font-family: var(--font-button);
-    font-size: 0.75rem;
-    letter-spacing: 0.25em;
   }
-
-  .font-h3 {
-    font-family: var(--font-h3);
-    font-size: 1.25rem;
-    letter-spacing: 0.025em;
+  
+  .storytelling-content {
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    position: relative;
   }
-
-  .font-h3.eventtime {
-    font-family: var(--font-h3);
-    font-size: 1rem;
-    margin-top: 4px;
-    opacity: 90%;
-  }
-
-  .font-h2 {
-    font-family: var(--font-h2);
+  
+  .story-line {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 90%;
+    width: 100%;
+    color: white;
+    font-family: 'Recoleta L', serif;
+    font-weight:300;
     font-size: 1.75rem;
-    letter-spacing: 0.050em;
+    line-height: 1.4;
+    text-align: center;
+    opacity: 0;
+    z-index: 10;
   }
 
-  .font-h2.countdown {
-    font-family: var(--font-h2);
-    font-size: 2.5rem;
+  .background-images {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
+.bg-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  background-color: black;
+  transition: opacity 1s ease-in-out;
+}
+.bg-slide.active {
+  opacity: 1;
+}
+  
+  /* Responsive text sizing */
+  @media (max-width: 376px) {
+    .story-line {
+      font-size: 1.65rem;
+      max-width: 95%;
+      padding: 0 1rem;
+    }
+  }
+  
+  @media (min-width: 640px) {
+    .story-line {
+      font-size: 2rem;
+      max-width: 80%;
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .story-line {
+      font-size: 2.25rem;
+      max-width: 70%;
+    }
   }
 
-  .font-p {
-    font-family: var(--font-p);
-    font-size: 1.75rem;
+    /* Scroll Down Indicator Styles */
+  .scroll-indicator {
+    position: absolute;
+    bottom: 200px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 20;
+    opacity: 1;
+    transition: opacity 0.5s ease-out;
   }
-
-  .font-smallcaption {
-    font-family: var(--font-smallcaption);
+  
+  .scroll-text {
+    font-family: var(--font-light);
     font-size: 0.75rem;
-    font-weight: 600;
-    opacity: 70%;
-    letter-spacing: 0.25em;
+    color: white;
+    opacity: 0.7;
+    margin-top: -8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  
+  /* Hide scroll indicator when not on first line */
+  .scroll-indicator.hidden {
+    opacity: 0;
+    pointer-events: none;
   }
 
-  .font-smallcaption.with-love {
-    font-family: var(--font-smallcaption);
-    font-size: 0.65rem;
-    font-weight: 600;
-    opacity: 70%;
-    letter-spacing: 0.25em;
+  /* Responsive adjustments */
+  @media (max-width: 376px) {
+    .scroll-indicator {
+      bottom: 60px;
+    }
+    
+    .scroll-text {
+      font-size: 0.65rem;
+    }
+  }
+  
+  /* Ensure video background shows through */
+  .storytelling-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4); /* Subtle overlay for text readability */
+    z-index: 1;
+  }
+  
+  .story-line {
+    z-index: 10; /* Above the overlay */
   }
 
-  .with-love{
-    font-family: var(--font-smallcaption);
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.3em;
-  }
+.font-subheading {
+  font-family: var(--font-body);  /* Use consistent variables */
+  font-size: var(--font-size-subheading);
+  letter-spacing: var(--letter-spacing-subheading);
+}
+
+.font-subheading.loading {
+  font-family: var(--font-body);
+  font-size: var(--font-size-subheading);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-size: var(--font-size-display);
+}
+
+.font-display.dresscode {
+  font-family: var(--font-display);
+  font-size: var(--font-size-display-dresscode);
+}
+
+.font-display.desktoplanding {
+  font-family: var(--font-display);
+  font-size: var(--font-size-display-desktop);
+}
+
+.font-button {
+  font-family: var(--font-dm-sans);
+  font-size: var(--font-size-button);
+  letter-spacing: var(--letter-spacing-subheading);
+}
+
+.font-h3 {
+  font-family: var(--font-body);
+  font-size: var(--font-size-h3);
+  letter-spacing: var(--letter-spacing-h3);
+}
+
+.font-h3.eventtime {
+  font-family: var(--font-light);
+  font-size: var(--font-size-h3-eventtime);
+  margin-top: 4px;
+  opacity: 90%;
+}
+
+.font-h2 {
+  font-family: 'Recoleta R', serif;
+  font-size: var(--font-size-h2);
+  letter-spacing: var(--letter-spacing-h2);
+  opacity:90%;
+}
+
+.font-h2.countdown {
+   font-family: 'Recoleta R', serif;
+  font-size: var(--font-size-h2-countdown);
+}
+
+.font-p {
+  font-family: var(--font-body);
+  font-size: var(--font-size-p);
+}
+
+.font-smallcaption {
+  font-family: var(--font-dm-sans);
+  font-size: var(--font-size-smallcaption);
+  font-weight: 600;
+  opacity: 70%;
+  letter-spacing: var(--letter-spacing-smallcaption);
+}
+
+.font-smallcaption.with-love {
+  font-family: var(--font-dm-sans);
+  font-size: var(--font-size-with-love);
+  font-weight: 600;
+  opacity: 70%;
+  letter-spacing: var(--letter-spacing-smallcaption);
+}
+
+.with-love {
+  font-family: var(--font-dm-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: var(--letter-spacing-with-love);
+}
 
   /* Calendar button enhancements */
   .calendar-button {
@@ -973,15 +1498,15 @@ $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/
 
   .font-display.desktoplanding {
     font-family: var(--font-display);
-    font-size: 6.55rem;
+    font-size: var(--font-size-display-desktop);
   }
 
   .font-subheading.desktoplanding {
-    font-family: var(--font-subheading);
-    font-size: 0.85rem;
-    letter-spacing: 0.25em;
+    font-family: var(--font-body);
+    font-size: var(--font-size-subheading-desktop);
+    letter-spacing: var(--letter-spacing-subheading);
   }
-
+  
   @media (max-width: 376px) {
     .landing-section {
       transform: scale(1);
@@ -999,75 +1524,63 @@ $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/
     }
 
     .font-subheading {
-      font-family: var(--font-subheading);
-      font-size: 0.65rem;
-      letter-spacing: 0.25em;
+      font-family: var(--font-body);
+      font-size: var(--font-size-subheading);
+      letter-spacing: var(--letter-spacing-subheading);
     }
 
     .font-display {
       font-family: var(--font-display);
-      font-size: 4.55rem;
+      font-size: var(--font-size-display);
     }
 
     .font-display.dresscode{
       font-family: var(--font-display);
-      font-size: 2.15rem;
+      font-size: var(--font-size-display-dresscode);
     }
 
     .font-button {
-      font-family: var(--font-button);
-      font-size: 0.65rem;
-      letter-spacing: 0.25em;
+      font-family: var(--font-dm-sans);
+      font-size: var(--font-size-button);
+      letter-spacing: var(--letter-spacing-subheading);
     }
 
     .font-h3 {
-      font-family: var(--font-h3);
-      font-size: 1.15rem;
-      letter-spacing: 0.025em;
+      font-family: var(--font-light);
+      font-size: var(--font-size-h3);
+      letter-spacing: var(--letter-spacing-h3);
     }
 
     .font-h3.eventtime {
-      font-family: var(--font-h3);
-      font-size: 0.9rem;
+      font-family: var(--font-light);
+      font-size: var(--font-size-h3-eventtime);
       margin-top: 4px;
       opacity: 90%;
     }
 
     .font-h2 {
-      font-family: var(--font-h2);
-      font-size: 1.65rem;
-      letter-spacing: 0.050em;
+      font-family: var(--font-light);
+      font-size: var(--font-size-h2);
+      letter-spacing: var(--letter-spacing-h2);
     }
 
     .font-h2.countdown {
-      font-family: var(--font-h2);
-      font-size: 2.4rem;
+      font-family: var(--font-light);
+      font-size: var(--font-size-h2-countdown);
     }
 
     .font-p {
-      font-family: var(--font-p);
-      font-size: 1.65rem;
+      font-family: var(--font-light);
+      font-size: var(--font-size-p);
     }
 
     .font-smallcaption {
-      font-family: var(--font-smallcaption);
-      font-size: 0.65rem;
+      font-family: var(--font-dm-sans);
+      font-size: var(--font-size-smallcaption);
       font-weight: 600;
       opacity: 70%;
-      letter-spacing: 0.25em;
+      letter-spacing: var(--letter-spacing-smallcaption);
     }
-  }
-
-  .video-background {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: -1;
-    background-color: #000;
-    object-position: 65%;
   }
 
   /* Mobile: Full screen video */
@@ -1076,14 +1589,9 @@ $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/
       /* Default styles work for mobile */
     }
   }
-
-  /* Desktop: Video only on right side (40% width) */
-  @media (min-width: 1024px) {
-    .video-background {
-      display: none;
-    }
-  }
+   
 </style>
+
 <audio
   bind:this={audio}
   loop
@@ -1111,12 +1619,6 @@ $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/
     <!-- Custom loading progress -->
     <div class="mt-8 flex flex-col text-center space-y-3">
       <p class="font-subheading loading text-white uppercase">{loadingStatus}</p>
-     <!-- <div class="w-60 md:w-68 lg:w-88 justify-center align-center h-0.5 bg-gray-800 overflow-hidden"> 
-         <div 
-          class="h-full bg-gray-300 transition-all duration-300 ease-out"
-          style="width: {loadingProgress}%"
-        ></div>
-     </div> -->
       <p class="font-subheading loading opacity-70">{Math.round(loadingProgress)}%</p>
     </div>
   </div>
@@ -1125,26 +1627,15 @@ $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/
   <!-- Main Content - Only show after loading is complete -->
   <div in:fade={{ duration: 800 }}>
     <slot />
-
-    <!-- <video
-          class="video-background"
-          poster={posterUrl}
-          style="height: 100%; min-height: 100%; object-position: 65%;"
-          autoplay
-          muted
-          loop
-          playsinline
-        >
-          {#if videoUrl}
-            <source src={videoUrl} type="video/webm" />
-          {/if}
-          Your browser does not support the video tag.
-        </video> -->
+<div class="story-progress-bar">
+  <div class="story-progress-fill"></div>
+</div>
+  
 
     <!-- Desktop Layout Wrapper -->
     <div class="hidden lg:flex h-screen overflow-hidden">
       <!-- Left Panel - New Landing Section (Desktop Only) -->
-      <div class="w-full h-full relative overflow-hidden">
+      <div class="w-[60%] h-full relative overflow-hidden">
         <!-- Background Image Carousel -->
         {#if images.length > 0}
           <img
@@ -1159,50 +1650,87 @@ $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/
         {/if}
         
         <!-- Dark overlay -->
-        <div class="absolute top-0 left-0 w-full h-full bg-black/40"></div>
+        <!-- <div class="absolute inset-0 bg-black/25"></div> -->
         
         <!-- Content Overlay -->
         <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 px-8">
           <div class="flex flex-col items-center justify-center">
-            <h1 class="font-display desktoplanding text-white text-center leading-none mb-22">
+            <h1 class="font-display desktoplanding text-white rotate-[-6deg] text-center leading-none mb-22">
               <p class="m-0">{name1}</p>
               <p class="-m-3">&</p>
               <p class="m-0">{name2}</p>
             </h1>
 
-            <p class="font-subheading desktoplanding uppercase text-white mb-20">
+            <p class="font-subheading desktoplanding uppercase text-white">
               {formatEventDate(primaryEvent?.event_date || invite.event_date, primaryEvent?.timezone)}
             </p>
-            <p>Please view on mobile for full experience.</p>
           </div>
         </div>
       </div>
     </div>
-
+  
+           
     <!-- Mobile Layout -->
-   <div class="lg:hidden h-[100dvh]">
-    
-     <Parallax guest={guest} clientSlug={clientSlug} />
-      <!--End of Landing-->
+   <div class="lg:hidden">
+    <section class="h-[100dvh] relative flex flex-col items-center justify-center text-center text-white">
+    <div class="background-images">
+      {#if backgroundImageUrl}
+        <img
+  src={backgroundImageUrl}
+  alt="bg"
+  class="relative w-full h-full object-cover"
+  style="object-position: 55% center !important;"
+/>
+      {:else if images.length > 0}
+        <img 
+          src={images[1]} 
+          alt="bg" 
+          class="relative w-full h-full object-cover"
+        />
+      {/if}
+      <div class="absolute inset-0 bg-black/40"></div>
+    </div>
+    <h1 class="font-h2 text-white mb-8">
+      Dearest, {guest.full_name}
+    </h1>
+    <button 
+      on:click={unlockScrollAndScrollDown}
+      class="font-button text-white px-8 py-4 border border-white rounded-full hover:bg-white hover:text-black transition uppercase"
+    >
+      Join the Celebration
+    </button>
+  </section>
 
-   <!-- Mobile Background Image Carousel Container -->
-    <div class="relative w-full">
-      <!-- Background Image Carousel for Mobile -->
-      {#if images.length > 0}
-  <div class="fixed inset-0 w-full h-full z-[-2]">
-    <img
-      src={images[0]}
-      alt="Background"
-      class="absolute inset-0 w-full h-full object-cover"
-      style="object-position: 65%;"
-    />
+
+  <section bind:this={section} class="storytelling-container h-[100dvh]">
+      <div class="background-images">
+    {#each images as img, i}
+      <img 
+        src={img} 
+        alt="bg" 
+        class="bg-slide" 
+        class:active={i === currentBgIndex}
+      />
+    {/each}
   </div>
-{:else}
-  <div class="fixed inset-0 w-full h-full bg-black z-[-2]"></div>
-{/if}
+    <div class="storytelling-content">
+      {#each lines as line, i}
+        <h2 class="story-line story-line-{i}" style="opacity: 0;">
+          {@html line}
+        </h2>
+      {/each}
+      
+      <!-- Scroll Down Indicator - Only shows on first line -->
+      <div class="scroll-indicator">
+        <div class="scale-50 opacity-80">
+          <LottieClientOnly {arrowDown} />
+        </div>
+        <!-- <p class="scroll-text">Scroll to continue</p> -->
+      </div>
+    </div>
+  </section>
 
-      <!-- Dark overlay for better text readability -->
-      <div class="fixed inset-0 w-full h-full bg-black/40 z-[-1]"></div>
+      <!--End of Landing-->
 
       <!--Devotions-->
       {#if invite.section_toggle.includes("devotions")}
@@ -1613,7 +2141,7 @@ $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/
             <p class="font-smallcaption uppercase opacity-80 mb-6">A Big Thank You</p>
             <h1 class="font-h2 mb-6">See You Soon!</h1>
             <h4 class="font-h3 eventtime">
-              {@html (couple?.thank_you || '-')}
+              {@html (couple?.thank_you || '-').replace(/\n/g, '')}
             </h4>
           </div>
 
@@ -1633,6 +2161,5 @@ $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/
       </div>
       {/if}
     </div>
-  </div>
   </div>
 {/if}
