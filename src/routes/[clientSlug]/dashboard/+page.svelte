@@ -1927,7 +1927,7 @@ onMount(async () => {
 
 .section-title {
     font-family: 'DM Sans', sans-serif;
-    font-size: 3em;
+    font-size: 1.25em;
     font-weight: 500;
     letter-spacing:0.001em;
     color: #111;
@@ -1936,7 +1936,7 @@ onMount(async () => {
 
 .section-description {
     font-family: 'DM Sans', sans-serif;
-    font-size: 2em;
+    font-size: 0.75em;
     font-weight: 300;
     letter-spacing:0.001em;
     color: #444;
@@ -1948,7 +1948,7 @@ onMount(async () => {
     border-radius: 999px;
    border:1px solid #ababab;
    font-family:'DM Sans', sans-serif;
-   font-size:1.5em;
+   font-size:0.75em;
     /* background: #D9D9D9; */
     display: flex;
     align-items: center;

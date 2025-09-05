@@ -1259,7 +1259,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
   /* Getty Effect Storytelling Styles */
   .storytelling-container {
-    height: 100vh;
+    height: 100dvh;
     width: 100%;
     position: relative;
     background: transparent; /* Let video background show through */
@@ -1514,12 +1514,12 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
     }
 
     .events-section {
-      transform: scale(0.9);
+      transform: scale(1);
       transform-origin: center top;
     }
 
     .wishes-section {
-      transform: scale(0.9);
+      transform: scale(1);
       transform-origin: center top;
     }
 
@@ -1661,9 +1661,10 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
               <p class="m-0">{name2}</p>
             </h1>
 
-            <p class="font-subheading desktoplanding uppercase text-white">
+            <p class="font-subheading desktoplanding uppercase text-white mb-12">
               {formatEventDate(primaryEvent?.event_date || invite.event_date, primaryEvent?.timezone)}
             </p>
+            <p class="font-subheading">For the best experience, please view the invite on mobile.</p>
           </div>
         </div>
       </div>
@@ -1672,7 +1673,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
            
     <!-- Mobile Layout -->
    <div class="lg:hidden">
-    <section class="h-[100dvh] relative flex flex-col items-center justify-center text-center text-white">
+    <section class="h-[100svh] relative flex flex-col items-center justify-center text-center text-white">
     <div class="background-images">
       {#if backgroundImageUrl}
         <img
@@ -1702,7 +1703,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
   </section>
 
 
-  <section bind:this={section} class="storytelling-container h-[100dvh]">
+  <section bind:this={section} class="storytelling-container h-[100svh]">
       <div class="background-images">
     {#each images as img, i}
       <img 
@@ -1734,7 +1735,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       <!--Devotions-->
       {#if invite.section_toggle.includes("devotions")}
-      <div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-4 sm:px-6 space-y-8 sm:space-y-12"> 
+      <div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100svh] px-4 sm:px-6 space-y-8 sm:space-y-12"> 
         <img src="/cross.png" alt="cross" class="w-4 h-5 sm:w-3 sm:h-4 object-fill opacity-80 fade-in">
         <h1 class="font-h2 text-white fade-in">I have found the one whom my soul loves.</h1>
         <p class="font-smallcaption font-bold text-white uppercase tracking-[1em] sm:tracking-[1.5em] md:tracking-[2em] opacity-90 text-xs sm:text-sm fade-in">SONG OF SOLOMON 3:4</p>
@@ -1813,7 +1814,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
       <!--End of Couple-->
 
       <!-- Events -->
-      <div class="flex flex-col events-section min-h-[100dvh] items-center justify-center text-center px-8 sm:px-10 md:px-12 py-10 sm:py-12 md:py-14 text-white ">
+      <div class="flex flex-col events-section min-h-[100svh] items-center justify-center text-center px-8 sm:px-10 md:px-12 py-10 sm:py-12 md:py-14 text-white ">
         {#each events as event, index}
           <!-- Check if this event type should be shown based on section_toggle -->
           {#if invite.section_toggle.includes(event.event_type) || invite.section_toggle.includes("events")}
@@ -1821,7 +1822,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
               
               <!-- Show "Event" label only for the first event -->
               {#if index === 0}
-                <p class="font-smallcaption uppercase opacity-80 mb-6">Event</p>
+                <p class="font-smallcaption uppercase opacity-80 mb-6">Chun Kit & Callyn</p>
               {/if}
               
               <!-- Dynamic Event Title -->
@@ -1895,17 +1896,15 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       {#if invite.section_toggle.includes("countdown")}
       <!--Countdown-->
-      <div class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100dvh] px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16">
+      <div class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100svh] px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16">
         <h1 class="font-h2 text-white mb-10 sm:mb-14 md:mb-22 fade-in">Until Our Celebration</h1>
-        {#if images.length > 0}
-          <img
-            src={images[currentIndex]}
-            alt="Countdown slideshow"
-            class="mb-10 max-h-[35vh] sm:max-h-[40vh] md:max-h-[50vh] w-auto max-w-[80%] sm:max-w-[70%] md:max-w-[60%] object-contain mx-auto transition-opacity duration-700"
-          />
-        {:else}
-          <p class="font-smallcaption text-white">Loading images...</p>
-        {/if}
+     
+         <img
+          src="/calendar.png"
+          alt="Calendar static"
+          class="mb-10 max-h-[35dvh] sm:max-h-[40dvh] md:max-h-[50dvh] w-auto max-w-[80%] sm:max-w-[70%] md:max-w-[60%] object-contain mx-auto border rounded-xl"
+        />
+      
         
         <div class="flex justify-center mb-12 fade-in">
           <div class="grid grid-cols-4 gap-6 text-center justify-center items-center">
@@ -1976,7 +1975,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       <!-- Wishes -->
       {#if invite.section_toggle.includes("wishes")}
-      <div class="relative w-full min-h-[100dvh] wishes-section overflow-hidden">
+      <div class="relative w-full min-h-[100svh] wishes-section overflow-hidden">
         <div class="fade-in">
           <Wishes inviteId={invite.id}/>
         </div>
@@ -1986,7 +1985,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       <!-- Dress Code -->
       {#if invite.section_toggle.includes("dress-code")}
-      <div class="relative w-full min-h-[100dvh] z-10 flex flex-col items-center justify-center text-center px-6 overflow-hidden">
+      <div class="relative w-full min-h-[100svh] z-10 flex flex-col items-center justify-center text-center px-6 overflow-hidden">
         <div class="fade-in">
           <!-- Content overlay -->
           <div class="text-white">
@@ -2021,9 +2020,9 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       {#if invite.section_toggle.includes("faq")}
       <!-- Rundown -->
-      <div class="relative w-full min-h-[100dvh] overflow-hidden">
+      <div class="relative w-full min-h-[100svh] overflow-hidden">
         <div class="fade-in">
-          <div class="relative z-10 min-h-[100dvh] flex flex-col items-center justify-center text-center text-white px-6 space-y-8">
+          <div class="relative z-10 min-h-[100svh] flex flex-col items-center justify-center text-center text-white px-6 space-y-8">
             <p class="font-smallcaption uppercase opacity-80 mb-6">EVENT RUNDOWN</p>
             <h1 class="font-h2 text-white mb-12">See everything we've got planned for you.</h1>
             
@@ -2042,7 +2041,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       <!-- Our Moments -->
       {#if invite.section_toggle.includes("our-moments")}
-      <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white">
+      <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100svh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white">
         <div class="fade-in">
           <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Our Moments</h1>
           <div class="flex flex-col items-center justify-center w-full mx-auto my-6 sm:my-8 md:my-10 px-4 z-10">
@@ -2065,7 +2064,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       {#if invite.section_toggle.includes("wedding-gift")}
       <!-- Wedding Gift-->
-      <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100dvh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white fade-in">
+      <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100svh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white fade-in">
         <p class="font-smallcaption uppercase opacity-80 mb-6">WEDDING GIFT</p>
         <h1 class="font-h2">A Token of Love</h1>
 
