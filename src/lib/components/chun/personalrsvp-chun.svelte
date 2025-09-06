@@ -478,7 +478,7 @@ const sendEmail = async () => {
 }
 </style>
 
-<section class="min-h-[100dvh] rsvp-section flex flex-col justify-center items-center px-8 md:px-16 lg:px-28 text-white">
+<section class="min-h-[100vh] rsvp-section flex flex-col justify-center items-center px-8 md:px-16 lg:px-28 text-white">
   <div class="max-w-xl w-full space-y-6 fade-in">
     <div class="text-center space-y-4">
       <p class="uppercase font-smallcaption mb-6">Reserve your seat</p>

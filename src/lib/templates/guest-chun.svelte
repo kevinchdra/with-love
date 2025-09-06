@@ -774,15 +774,49 @@ if (storytellingContainer) {
   const progressBar = document.querySelector('.story-progress-bar');
   const progressFill = document.querySelector('.story-progress-fill');
   
-  const tl = gsap.timeline({
-    scrollTrigger: {
-      trigger: ".storytelling-container",
-      start: "top top",
-      end: `+=${lines.length * 1200}`, 
-      scrub: 1,
-      pin: true,
-      anticipatePin: 1,
-      onUpdate: (self) => {
+  // Track background state
+  let lastProgress = 0;
+  let currentBackgroundStep = 0;
+  const totalBackgroundSteps = Math.floor(lines.length / 2); // One background change every 2 lines
+  
+const tl = gsap.timeline({
+  scrollTrigger: {
+    trigger: ".storytelling-container",
+    start: "top top",
+    end: `+=${lines.length * 1200}`, 
+    scrub: 1,
+    pin: true,
+    anticipatePin: 1,
+    pinType: "fixed", // ← Add this to use position: fixed instead of transforms
+    onUpdate: (self) => {
+        const currentProgress = self.progress;
+        const direction = currentProgress > lastProgress ? 1 : -1; // 1 = down, -1 = up
+        
+        // Calculate which background step we should be on based on progress
+        const targetStep = Math.floor(currentProgress * totalBackgroundSteps);
+        
+        // Update background if step has changed and we have images
+        if (targetStep !== currentBackgroundStep && images.length > 0) {
+          // Clamp the target step to valid range
+          const clampedStep = Math.max(0, Math.min(targetStep, images.length - 1));
+          
+          if (direction === 1) {
+            // Scrolling down - move forward through images
+            currentBgIndex = clampedStep;
+          } else {
+            // Scrolling up - move backward through images
+            currentBgIndex = clampedStep;
+          }
+          
+          currentBackgroundStep = targetStep;
+          console.log(`GSAP: Direction: ${direction === 1 ? 'down' : 'up'}, Progress: ${currentProgress.toFixed(3)}, Step: ${targetStep}, Background Index: ${currentBgIndex}`);
+          
+          // Force Svelte reactivity
+          currentBgIndex = currentBgIndex;
+        }
+        
+        lastProgress = currentProgress;
+        
         // Update progress bar
         if (progressFill) {
           progressFill.style.width = `${self.progress * 100}%`;
@@ -824,9 +858,7 @@ if (storytellingContainer) {
     }
   });
 
-
-
-  // Create line-by-line animations
+  // Create line-by-line animations (removing the old background change logic)
   lines.forEach((_, i) => {
     if (i < lines.length - 1) {
       // Hide scroll indicator on first transition
@@ -837,19 +869,8 @@ if (storytellingContainer) {
         }, `line${i + 1}`);
       }
 
-      // Change background every 2 lines
-     if (i > 0 && i % 2 === 0) {
-  tl.add(() => {
-    // Only change if we have images loaded
-    if (images.length > 0) {
-      currentBgIndex = (currentBgIndex + 1) % images.length;
-      console.log(`GSAP: Changing background to index ${currentBgIndex}, image: ${images[currentBgIndex]}`);
-      
-      // Force Svelte reactivity by creating a new assignment
-      currentBgIndex = currentBgIndex;
-    }
-  }, `line${i + 1}`);
-}
+      // Remove the old background changing logic from here
+      // The background now changes based on scroll progress in onUpdate
       
       // Fade out current line
       tl.to(`.story-line-${i}`, { 
@@ -936,31 +957,21 @@ function handleVisibilityChange() {
 }
 
   // ─── Scroll to Devotions Section ─────────────────────────────────────────
-  function unlockScrollAndScrollDown() {
-    const targetY = window.innerHeight;
-    const startY = window.pageYOffset;
-    const distance = targetY - startY;
-    const duration = 1000; // milliseconds
-    let startTime = null;
-
-    function smoothScroll(currentTime) {
-      if (startTime === null) startTime = currentTime;
-      const timeElapsed = currentTime - startTime;
-      const progress = Math.min(timeElapsed / duration, 1);
-      
-      // Ease-out function for smooth deceleration
-      const ease = 1 - Math.pow(1 - progress, 3);
-      
-      window.scrollTo(0, startY + (distance * ease));
-      
-      if (progress < 1) {
-        requestAnimationFrame(smoothScroll);
-      }
-    }
-    
-    requestAnimationFrame(smoothScroll);
+ function unlockScrollAndScrollDown() {
+  const storytellingContainer = document.querySelector('.storytelling-container');
+  
+  if (!storytellingContainer) {
+    console.error('Storytelling container not found');
+    return;
   }
-
+  
+  // Use native smooth scrolling to the exact element position
+  storytellingContainer.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start', // Align to the top of the element
+    inline: 'nearest'
+  });
+}
   // ─── Account Copy ─────────────────────────────────────────────────────────
   async function copyAccountNumber(number) {
     try {
@@ -1110,23 +1121,7 @@ function handleVisibilityChange() {
 
   $: inviteImageUrl = `https://your-supabase-url.supabase.co/storage/v1/object/public/invites-images/${data.clientData?.slug || 'default'}/preview.webp`;
   $: currentUrl = `https://startswithlove.com${$page.url.pathname}`;
-$: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgIndex === 'number') {
-  setTimeout(() => {
-    const bgSlides = document.querySelectorAll('.bg-slide');
-    console.log(`Reactive: Found ${bgSlides.length} bg-slides, currentBgIndex: ${currentBgIndex}, images.length: ${images.length}`);
-    
-    if (bgSlides.length > 0 && currentBgIndex < images.length) {
-      bgSlides.forEach((slide, index) => {
-        if (index === currentBgIndex) {
-          slide.classList.add('active');
-          console.log(`✅ Activated slide ${index}`);
-        } else {
-          slide.classList.remove('active');
-        }
-      });
-    }
-  }, 50);
-}
+
 
 </script>
 
@@ -1259,7 +1254,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
   /* Getty Effect Storytelling Styles */
   .storytelling-container {
-    height: 100dvh;
+    height: 100vh;
     width: 100%;
     position: relative;
     background: transparent; /* Let video background show through */
@@ -1275,6 +1270,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
     text-align: center;
     padding: 2rem;
     position: relative;
+  transform-origin: center center;
   }
   
   .story-line {
@@ -1298,9 +1294,13 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
   position: fixed;
   inset: 0;
   z-index: -1;
+  transform-origin: center center;
+  will-change:auto;
+
+     transform:scale(1) !important;
 }
 .bg-slide {
-  position: absolute;
+  position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -1308,6 +1308,9 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
   opacity: 0;
   background-color: black;
   transition: opacity 1s ease-in-out;
+   will-change: opacity;
+    backface-visibility: hidden; 
+     transform: scale(1) !important;
 }
 .bg-slide.active {
   opacity: 1;
@@ -1635,7 +1638,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
     <!-- Desktop Layout Wrapper -->
     <div class="hidden lg:flex h-screen overflow-hidden">
       <!-- Left Panel - New Landing Section (Desktop Only) -->
-      <div class="w-[60%] h-full relative overflow-hidden">
+      <div class="w-full h-full relative overflow-hidden">
         <!-- Background Image Carousel -->
         {#if images.length > 0}
           <img
@@ -1673,7 +1676,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
            
     <!-- Mobile Layout -->
    <div class="lg:hidden">
-    <section class="h-[100svh] relative flex flex-col items-center justify-center text-center text-white">
+    <section class="h-[100vh] relative flex flex-col items-center justify-center text-center text-white">
     <div class="background-images">
       {#if backgroundImageUrl}
         <img
@@ -1703,7 +1706,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
   </section>
 
 
-  <section bind:this={section} class="storytelling-container h-[100svh]">
+  <section bind:this={section} class="storytelling-container h-[100vh]">
       <div class="background-images">
     {#each images as img, i}
       <img 
@@ -1735,7 +1738,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       <!--Devotions-->
       {#if invite.section_toggle.includes("devotions")}
-      <div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100svh] px-4 sm:px-6 space-y-8 sm:space-y-12"> 
+      <div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100vh] px-4 sm:px-6 space-y-8 sm:space-y-12"> 
         <img src="/cross.png" alt="cross" class="w-4 h-5 sm:w-3 sm:h-4 object-fill opacity-80 fade-in">
         <h1 class="font-h2 text-white fade-in">I have found the one whom my soul loves.</h1>
         <p class="font-smallcaption font-bold text-white uppercase tracking-[1em] sm:tracking-[1.5em] md:tracking-[2em] opacity-90 text-xs sm:text-sm fade-in">SONG OF SOLOMON 3:4</p>
@@ -1814,7 +1817,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
       <!--End of Couple-->
 
       <!-- Events -->
-      <div class="flex flex-col events-section min-h-[100svh] items-center justify-center text-center px-8 sm:px-10 md:px-12 py-10 sm:py-12 md:py-14 text-white ">
+      <div class="flex flex-col events-section min-h-[100vh] items-center justify-center text-center px-8 sm:px-10 md:px-12 py-10 sm:py-12 md:py-14 text-white ">
         {#each events as event, index}
           <!-- Check if this event type should be shown based on section_toggle -->
           {#if invite.section_toggle.includes(event.event_type) || invite.section_toggle.includes("events")}
@@ -1896,13 +1899,13 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       {#if invite.section_toggle.includes("countdown")}
       <!--Countdown-->
-      <div class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100svh] px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16">
+      <div class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100vh] px-8 sm:px-6 space-y-8 sm:space-y-12 md:space-y-16">
         <h1 class="font-h2 text-white mb-10 sm:mb-14 md:mb-22 fade-in">Until Our Celebration</h1>
      
          <img
           src="/calendar.png"
           alt="Calendar static"
-          class="mb-10 max-h-[35dvh] sm:max-h-[40dvh] md:max-h-[50dvh] w-auto max-w-[80%] sm:max-w-[70%] md:max-w-[60%] object-contain mx-auto border rounded-xl"
+          class="mb-20 mt-10 max-h-[35vh] sm:max-h-[40vh] md:max-h-[50vh] w-auto max-w-[80%] sm:max-w-[70%] md:max-w-[60%] object-contain mx-auto border-none"
         />
       
         
@@ -1975,7 +1978,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       <!-- Wishes -->
       {#if invite.section_toggle.includes("wishes")}
-      <div class="relative w-full min-h-[100svh] wishes-section overflow-hidden">
+      <div class="relative w-full min-h-[100vh] wishes-section overflow-hidden">
         <div class="fade-in">
           <Wishes inviteId={invite.id}/>
         </div>
@@ -1985,7 +1988,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       <!-- Dress Code -->
       {#if invite.section_toggle.includes("dress-code")}
-      <div class="relative w-full min-h-[100svh] z-10 flex flex-col items-center justify-center text-center px-6 overflow-hidden">
+      <div class="relative w-full min-h-[100vh] z-10 flex flex-col items-center justify-center text-center px-6 overflow-hidden">
         <div class="fade-in">
           <!-- Content overlay -->
           <div class="text-white">
@@ -2020,9 +2023,9 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       {#if invite.section_toggle.includes("faq")}
       <!-- Rundown -->
-      <div class="relative w-full min-h-[100svh] overflow-hidden">
+      <div class="relative w-full min-h-[100vh] overflow-hidden">
         <div class="fade-in">
-          <div class="relative z-10 min-h-[100svh] flex flex-col items-center justify-center text-center text-white px-6 space-y-8">
+          <div class="relative z-10 min-h-[100vh] flex flex-col items-center justify-center text-center text-white px-6 space-y-8">
             <p class="font-smallcaption uppercase opacity-80 mb-6">EVENT RUNDOWN</p>
             <h1 class="font-h2 text-white mb-12">See everything we've got planned for you.</h1>
             
@@ -2041,7 +2044,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       <!-- Our Moments -->
       {#if invite.section_toggle.includes("our-moments")}
-      <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100svh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white">
+      <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100vh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white">
         <div class="fade-in">
           <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Our Moments</h1>
           <div class="flex flex-col items-center justify-center w-full mx-auto my-6 sm:my-8 md:my-10 px-4 z-10">
@@ -2064,7 +2067,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       {#if invite.section_toggle.includes("wedding-gift")}
       <!-- Wedding Gift-->
-      <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100svh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white fade-in">
+      <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100vh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white fade-in">
         <p class="font-smallcaption uppercase opacity-80 mb-6">WEDDING GIFT</p>
         <h1 class="font-h2">A Token of Love</h1>
 
@@ -2131,7 +2134,7 @@ $: if (typeof document !== 'undefined' && images.length > 0 && typeof currentBgI
 
       {#if invite.section_toggle.includes("thank-you")}
       <!--Thank you-->
-      <div class="relative flex flex-col items-center w-full h-[100dvh] fade-in">
+      <div class="relative flex flex-col items-center w-full h-[100vh] fade-in">
         <div class="absolute inset-0 bg-black opacity-0 z-[5] transition-opacity duration-1000 ease-in"></div>
         
         <div class="absolute inset-0 flex flex-col items-center text-center text-white z-10 p-6 sm:p-8 md:p-10">
