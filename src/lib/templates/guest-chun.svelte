@@ -619,25 +619,25 @@ function preloadAudio(src) {
   }
 
   const lines = [
-    "By the time you read this,",
-    "our wedding day will already be drawing near.",
-    "We used to think a wedding was simply a formality,",
-    "but now we know, it is a rare and precious gathering,",
-    "a journey of love from miles away,",
-    "a gift of presence we will forever treasure.",
-    "In a lifetime of more than 30,000 days,",
-    "what moves us most,",
-    "is that you've chosen to spend this one day with us.",
+    "By the time you read this,<br>当你收到这封请柬的时候",
+    "our wedding day will already be drawing near.<br>我们的婚礼已经在倒计时啦",
+    "We used to think a wedding was simply a formality,<br>曾经觉得，婚礼只是一个形式，一则官方通告",
+    "but now we know, it is a rare and precious gathering,<br>但现在我们才明白,这是一场为数不多的相聚",
+    "a journey of love from miles away,<br>是挚爱亲友们跨越距离的到来,<br>千里迢迢的奔赴",
+    "a gift of presence we will forever treasure.<br>是亲人温暖的陪伴,<br>是朋友一路的欢笑,<br>是每一份不辞辛苦的<br>支持与守候。<br>这些心意,<br>都是我们此生最珍贵的礼物。",
+    "In a lifetime of more than 30,000 days,<br>人生三万多个日子里，<br>有平凡，有特别",
+    "what moves us most,<br>而我们的婚礼这天之所以格外难忘,",
+    "is that you've chosen to spend this one day with us.<br>是因为这一天你专门为我们而来",
     "This day,",
-    "our wedding day,",
-    "will forever be extraordinary,",
-    "because you have chosen to share it with us.",
-    "Your presence is the greatest blessing,",
-    "a reminder that love is not just between two people,",
-    "but carried and strengthened by the hearts around them.",
-    "Thank you for coming,",
-    "thank you for standing by us.",
-    "It's been a while but we can't wait to see you at the wedding.",
+    "our wedding day,<br>我们婚礼这天",
+    "will forever be extraordinary,<br>正因为有你的见证和参与,",
+    "because you have chosen to share it with us.<br>变得无比珍贵",
+    "Your presence is the greatest blessing,<br>因为有你，我们才真正懂得",
+    "a reminder that love is not just between two people,<br>爱不仅仅属于两个人,",
+    "but carried and strengthened by the hearts around them.<br>而是被所有亲友的心意与祝福托起。",
+    "Thank you for coming,<br>谢谢你愿意来,",
+    "thank you for standing by us.<br>谢谢你一直都在。",
+    "It's been a while but we can't wait to see you at the wedding.<br>最后想说,<br>久不见,<br>我们婚礼见! ",
   ];
   
 
@@ -849,46 +849,47 @@ const tl = gsap.timeline({
     }
   });
 
-  // Initialize all lines as hidden except the first one
-  lines.forEach((_, i) => {
-    if (i === 0) {
-      gsap.set(`.story-line-${i}`, { opacity: 1, y: 0, scale: 1 });
-    } else {
-      gsap.set(`.story-line-${i}`, { opacity: 0, y: 20, scale: 0.95 });
-    }
-  });
+ // Initialize all lines
+lines.forEach((_, i) => {
+  // keep outer centered (no animated y/scale on <h2>)
+  gsap.set(`.story-line-${i}`, { opacity: i === 0 ? 1 : 0 });
 
-  // Create line-by-line animations (removing the old background change logic)
-  lines.forEach((_, i) => {
-    if (i < lines.length - 1) {
-      // Hide scroll indicator on first transition
-      if (i === 0 && scrollIndicator) {
-        tl.to(scrollIndicator, {
-          opacity: 0,
-          duration: 0.3
-        }, `line${i + 1}`);
-      }
-
-      // Remove the old background changing logic from here
-      // The background now changes based on scroll progress in onUpdate
-      
-      // Fade out current line
-      tl.to(`.story-line-${i}`, { 
-        opacity: 0, 
-        y: -20, 
-        scale: 0.95, 
-        duration: 0.8 
-      }, `line${i + 1}`)
-      
-      // Fade in next line
-      .to(`.story-line-${i + 1}`, {
-        opacity: 1, 
-        y: 0, 
-        scale: 1, 
-        duration: 1 
-      }, `line${i + 1}+=0.2`);
-    }
+  // animate the inner wrapper instead
+  gsap.set(`.story-line-${i} .line-inner`, {
+    opacity: i === 0 ? 1 : 0,
+    yPercent: i === 0 ? 0 : 10,
+    scale: i === 0 ? 1 : 0.98
   });
+});
+
+// Timeline transitions
+lines.forEach((_, i) => {
+  if (i < lines.length - 1) {
+    tl.to(`.story-line-${i} .line-inner`, {
+      opacity: 0,
+      yPercent: -5,   // small up drift on exit
+      scale: 0.98,
+      duration: 0.7,
+      ease: "power2.out"
+    }, `line${i + 1}`)
+    .to(`.story-line-${i}`, {
+      opacity: 0,     // fade outer to fully hide hitbox
+      duration: 0.4
+    }, `line${i + 1}`);
+
+    tl.to(`.story-line-${i + 1}`, {
+      opacity: 1,
+      duration: 0.2
+    }, `line${i + 1}+=0.15`)
+    .to(`.story-line-${i + 1} .line-inner`, {
+      opacity: 1,
+      yPercent: 0,
+      scale: 1,
+      duration: 0.9,
+      ease: "power2.out"
+    }, `line${i + 1}+=0.15`);
+  }
+});
 
   // Hold last line briefly then fade out
   tl.to(`.story-line-${lines.length - 1}`, { 
@@ -1273,22 +1274,30 @@ function handleVisibilityChange() {
   transform-origin: center center;
   }
   
-  .story-line {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    max-width: 90%;
-    width: 100%;
-    color: white;
-    font-family: 'Recoleta L', serif;
-    font-weight:300;
-    font-size: 1.75rem;
-    line-height: 1.4;
-    text-align: center;
-    opacity: 0;
-    z-index: 10;
-  }
+ .story-line {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;                 /* kill default h2 margins */
+  max-width: 90%;
+  width: 100%;
+  color: #fff;
+  font-family: 'Recoleta L', serif;
+  font-weight: 300;
+  font-size: 1.75rem;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0;                 /* initial state handled by GSAP set() too */
+  z-index: 10;
+  pointer-events: none;       /* avoids accidental hit-testing on hidden ones */
+  will-change: opacity, transform;
+}
+
+.story-line .line-inner {
+  display: inline-block;      /* isolate transforms here */
+  will-change: opacity, transform;
+}
 
   .background-images {
   position: fixed;
@@ -1719,10 +1728,10 @@ function handleVisibilityChange() {
   </div>
     <div class="storytelling-content">
       {#each lines as line, i}
-        <h2 class="story-line story-line-{i}" style="opacity: 0;">
-          {@html line}
-        </h2>
-      {/each}
+    <h2 class="story-line story-line-{i}">
+      <span class="line-inner">{@html line}</span>
+    </h2>
+  {/each}
       
       <!-- Scroll Down Indicator - Only shows on first line -->
       <div class="scroll-indicator">

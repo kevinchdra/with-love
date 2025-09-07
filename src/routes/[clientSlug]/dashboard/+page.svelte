@@ -1583,29 +1583,86 @@ onMount(async () => {
 </svelte:head>
 
 <style lang="postcss">
-  @reference "tailwindcss";
 @import 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'
+  @reference "tailwindcss";
+
 /* ============================================================================
    FONTS & ANIMATIONS
-   ============================================================================ */
-
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
+   ============================================================================ *
 
 /* ============================================================================
    GLOBAL STYLES
    ============================================================================ */
-:global(html) {
-    -webkit-font-smoothing: antialiased; 
-    -moz-osx-font-smoothing: grayscale; 
-}
+:root {
+  /* Brand */
+  --brand: #111111;
+  --brand-ink: #000000;
 
+  /* Surfaces & backgrounds */
+--bg: #FAFAF8;
+  --surface: #FFFFFF;
+  --surface-variant: #F6F6F4;
+
+  /* Borders & outlines */
+   --border-subtle: #ABABAB;
+  --border: #d4d4d4;
+
+  /* Text */
+  --text: #111111;
+  --text-weak: #444444;
+  --text-muted: #737373;
+
+  /* Accents / states */
+  --accent: #3b82f6;          /* info */
+  --accent-weak: #f0f9ff;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+
+  /* Success & semantic badges */
+  --success-bg: #DAFFCD;
+  --success-fg: #046E11;
+  --warning-bg: #FFEFCD;
+  --warning-fg: #6E6004;
+  --danger-bg: #ef444420;
+  --danger-fg: #ef4444;
+  --info-bg: #3b82f620;
+  --info-fg: #3b82f6;
+  --secondary-bg: #FFCDCD;
+  --secondary-fg: #6E0404;
+
+  /* Typography */
+  --ff-sans: 'DM Sans', system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+  --fs-display: clamp(28px, 2.6vw, 44px);
+  --fs-title: 20px;
+  --fs-body: 16px;
+  --fs-caption: 12px;
+  --lh-tight: 1.25;
+  --lh-body: 1.5;
+
+  /* Spacing (scale) */
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-pill: 999px;
+  --radius-card: 20px;
+
+  /* Elevation (shadows) */
+  --elev-0: 0 0 0 rgba(0,0,0,0);
+  --elev-1: 0 1px 2px rgba(0,0,0,.06), 0 1px 1px rgba(0,0,0,.04);
+  --elev-2: 0 4px 12px rgba(0,0,0,.08);
+}
 :global(body) {
     margin: 0;
     padding: 0;
-    background: #FAFAF8;
+    background: var(--bg);
 }
 
 /* ============================================================================
@@ -1622,13 +1679,13 @@ onMount(async () => {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: #FAFAF8;
+    background: var(--bg);
    
 }
 
-.dashboard-content {
-    padding: 4rem 6rem;
-    border-bottom:1px solid #ababab;
+.dashboard-content{
+  padding: 4rem 6rem;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 /* .breadcrumb {
@@ -1637,7 +1694,7 @@ onMount(async () => {
     position: sticky;
     top: 0;
     z-index: 10;
-    border-bottom:0.75px solid #ABABAB
+    border-bottom:0.75px solid var(--border-subtle)
 }
 
 .breadcrumb-path {
@@ -1653,7 +1710,7 @@ onMount(async () => {
   justify-content: center;
   height: 70vh; 
   text-align: center;
-  border-bottom: 0.75px solid #ABABAB; 
+  border-bottom: 0.75px solid var(--border-subtle); 
 }
 
 .empty-content {
@@ -1712,16 +1769,9 @@ onMount(async () => {
 /* ============================================================================
    SIDEBAR
    ============================================================================ */
-.sidebar {
-    width: 15vw;
-    background: #FAFAF8;
-    border-right: 0.75px solid #ABABAB;
-    display: flex;
-    flex-direction: column;
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    transition: width 300ms ease-in 100ms;
+.sidebar{
+  background: var(--bg);
+  border-right: 0.75px solid var(--border-subtle);
 }
 
 .sidebar.collapsed {
@@ -1746,7 +1796,7 @@ onMount(async () => {
 }
 
 .sidebar-toggle:hover {
-    background: #e8e8e8;
+    background: var(--surface-variant);
     border-radius: 4px;
     color: #000;
     transition: background-color 300ms ease-in 100ms;
@@ -1818,7 +1868,7 @@ onMount(async () => {
 }
 
 .sidebar.collapsed .nav-item:hover {
-    background-color: #e8e8e8;
+    background-color: var(--surface-variant);
     border-radius: 8px;
 }
 
@@ -1908,7 +1958,7 @@ onMount(async () => {
    ============================================================================ */
 .metrics-section {
     margin-bottom: 32px;
-    /* border-bottom:0.75px solid #ABABAB */
+    /* border-bottom:0.75px solid var(--border-subtle) */
     
 }
 
@@ -1925,30 +1975,25 @@ onMount(async () => {
     margin-bottom: 30px;
 }
 
-.section-title {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 1.25em;
-    font-weight: 500;
-    letter-spacing:0.001em;
-    color: #111;
-    /* margin: 2rem 0 0 0; */
+.section-title{
+  font-family: var(--ff-sans);
+  font-size: var(--fs-title);
+  color: var(--text);
 }
 
-.section-description {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.75em;
-    font-weight: 300;
-    letter-spacing:0.001em;
-    color: #444;
-    opacity: 0.8;
+.section-description{
+  font-family: var(--ff-sans);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  opacity: .8;
 }
 
 .uploadguests-btn{
        padding:24px 48px;
     border-radius: 999px;
-   border:1px solid #ababab;
+   border:1px solid var(--border-subtle);
    font-family:'DM Sans', sans-serif;
-   font-size:0.75em;
+   font-size:1.5em;
     /* background: #D9D9D9; */
     display: flex;
     align-items: center;
@@ -1976,37 +2021,24 @@ onMount(async () => {
     gap: 20px;
 }
 
-.metric-card {
-    background: linear-gradient(220deg, #cdd1ff 0%, #c6cbff 100%);
-    border-radius: 20px;
-    padding: 2rem;
-    border: none;
-    text-align:left;
-    transition: all 0.2s ease-in-out;
+.metric-card{
+  /* Keep gradient if desired, or use a flat token surface: */
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  padding: var(--sp-8);
+  box-shadow: var(--elev-1);
 }
 
-/* .metric-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-} */
 
-.metric-label {
-    font-family:'DM Sans',sans-serif;
-    font-size: 1.875em;
-    font-weight:500;
-    letter-spacing:0.015em;
-    color: #000;
-    opacity:70%;
-    
-    display:flex;
-    align-items:flex-start;
+.metric-label{
+  font-family: var(--ff-sans);
+  font-size: 1.875em;
+  color: var(--text);
+  opacity: .7;
 }
 
-.metric-value {
-    font-size: 5.5em; /* smaller, closer to screenshot */
-    font-weight: 600;
-    color: #000;
-   
+.metric-value{
+  color: var(--text);
 }
 
 /* .metric-subtitle {
@@ -2039,7 +2071,7 @@ onMount(async () => {
     width: 4rem;
     height: 4rem;
     border-radius: 12px;
-   border:0.75px solid #ababab;
+   border:0.75px solid var(--border-subtle);
     /* background: #D9D9D9; */
     display: flex;
     align-items: center;
@@ -2094,12 +2126,12 @@ onMount(async () => {
 
 
 
-.table-container {
-    
-    border-radius: 10px;
-    padding: 3rem;
-    margin-bottom: 24px;
-    border: 0.75px solid #ABABAB;
+.table-container{
+  border-radius: var(--radius);
+  padding: var(--sp-12);
+  border: 0.75px solid var(--border-subtle);
+  background: var(--surface);
+  box-shadow: var(--elev-0);
 }
 
 .table-actions {
@@ -2134,7 +2166,7 @@ onMount(async () => {
 }
 
 .data-table tr:hover td {
-    background: #E8E8E8;
+    background: var(--surface-variant);
 }
 
 .data-table tr.clickable-row {
@@ -2717,7 +2749,7 @@ onMount(async () => {
 }
 
 .modal-content {
-    background: #FAFAF8;
+    background: var(--bg);
     border-radius: 12px;
     padding: 24px;
     max-width: 500px;
@@ -2970,7 +3002,7 @@ onMount(async () => {
     color: black;
     font-weight: 500;
     text-decoration:underline;
-    text-decoration-color:#ababab;
+    text-decoration-color:var(--border-subtle);
     text-underline-offset:4px;
     opacity:50%;
 }
@@ -3888,7 +3920,7 @@ onMount(async () => {
                                     {previewMessage.length} characters
                                 </div>
                                <div class="change-globaltemp">
-    <button on:click={openSettingsModal} style="background: none; border: none; padding: 0; cursor: pointer; color: black; font-size: 1em; font-weight: 500; text-decoration: underline; text-decoration-color: #ababab; text-underline-offset: 4px; opacity: 50%;">
+    <button on:click={openSettingsModal} style="background: none; border: none; padding: 0; cursor: pointer; color: black; font-size: 1em; font-weight: 500; text-decoration: underline; text-decoration-color: var(--border-subtle); text-underline-offset: 4px; opacity: 50%;">
         Click to change your global template here
     </button>
 </div>

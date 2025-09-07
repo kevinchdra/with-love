@@ -28,10 +28,22 @@
   let submissionMessage = '';
   let submissionError = '';
 
-  let mealPreference = '';
+  // CHANGED: Replace single mealPreference with dynamic guestDetails array
+  let guestDetails = [];
 
   $: showMealOptions = invite?.meal_options_enabled && attending === 'yes';
-$: mealOptions = invite?.meal_options || [];
+  $: mealOptions = invite?.meal_options || [];
+
+  // ADDED: Initialize guestDetails based on guestCount
+  $: {
+    if (guestCount > 0) {
+      // Preserve existing data while adjusting array length
+      const newGuestDetails = Array(guestCount).fill().map((_, i) => 
+        guestDetails[i] || { name: '', meal: '', dietary: '' }
+      );
+      guestDetails = newGuestDetails;
+    }
+  }
 
   // Validation state - only show errors after user tries to proceed
   let showValidationErrors = false;
@@ -41,11 +53,7 @@ $: mealOptions = invite?.meal_options || [];
     phone: ''
   };
 
-
-
-
   onMount(async () => {
-
     if (guest) {
       initializeGuestData(guest);
     } else if (guestSlug) {
@@ -53,11 +61,10 @@ $: mealOptions = invite?.meal_options || [];
     } else {
       submissionError = 'Invalid invitation link';
     }
-   console.log('🔍 Invite object:', invite);
-  console.log('🔍 meal_options_enabled:', invite?.meal_options_enabled);
-  console.log('🔍 meal_options:', invite?.meal_options);
-  console.log('🔍 showMealOptions will be:', invite?.meal_options_enabled && attending === 'yes');
-  
+    console.log('🔍 Invite object:', invite);
+    console.log('🔍 meal_options_enabled:', invite?.meal_options_enabled);
+    console.log('🔍 meal_options:', invite?.meal_options);
+    console.log('🔍 showMealOptions will be:', invite?.meal_options_enabled && attending === 'yes');
   });
 
   function initializeGuestData(guestData) {
@@ -70,6 +77,19 @@ $: mealOptions = invite?.meal_options || [];
     guestCount = guestData.guest_count || 1;
     dietary = guestData.dietary_restriction || '';
     wishes = guestData.wishes || '';
+
+    // ADDED: Initialize guestDetails from existing meal_preference data
+    if (guestData.meal_preference) {
+      try {
+        const parsedMealData = JSON.parse(guestData.meal_preference);
+        if (parsedMealData.guests && Array.isArray(parsedMealData.guests)) {
+          guestDetails = parsedMealData.guests;
+        }
+      } catch (e) {
+        // If it's old format (single string), convert to new format
+        guestDetails = [{ name: name, meal: guestData.meal_preference, dietary: dietary }];
+      }
+    }
   }
 
   async function fetchGuestData() {
@@ -93,10 +113,8 @@ $: mealOptions = invite?.meal_options || [];
       phone: ''
     };
 
-
     let isValid = true;
 
-    // Check if fields are empty
     if (!name.trim()) {
       validationErrors.name = 'Name is required';
       isValid = false;
@@ -124,63 +142,68 @@ $: mealOptions = invite?.meal_options || [];
     return isValid;
   }
 
-   function validateStep2() {
-  if (showMealOptions && attending === 'yes' && !mealPreference) {
-    return false; // Meal selection is required
+  // UPDATED: Validate all guests have selected meals and provided names
+  function validateStep2() {
+    if (showMealOptions && attending === 'yes') {
+      return guestDetails.every(guest => 
+        guest.meal && guest.name && guest.name.trim()
+      );
+    }
+    return true;
   }
-  return true;
-}
 
- function nextStep() {
-  if (step === 1) {
-    showValidationErrors = true;
-    if (!validateStep1()) {
-      return;
-    }
-  }
-  
-  if (step === 2) {
-    if (attending === 'no') {
-      step = 3; // Skip meal selection for non-attendees
-    } else if (showMealOptions) {
-      step = 2.5; // Go to meal selection step
-    } else {
-      step = 3; // Skip to wishes if no meal options
-    }
-  } else if (step === 2.5) {
-    // Validate meal selection when leaving step 2.5
-    if (showMealOptions && !validateStep2()) {
+  function nextStep() {
+    if (step === 1) {
       showValidationErrors = true;
-      return;
+      if (!validateStep1()) {
+        return;
+      }
     }
-    step = 3; // Go to wishes after meal selection
-  } else {
-    step++;
+    
+    if (step === 2) {
+      if (attending === 'no') {
+        step = 3; // Skip meal selection for non-attendees
+      } else if (showMealOptions) {
+        step = 2.5; // Go to meal selection step
+      } else {
+        step = 3; // Skip to wishes if no meal options
+      }
+    } else if (step === 2.5) {
+      // Validate meal selection when leaving step 2.5
+      if (showMealOptions && !validateStep2()) {
+        showValidationErrors = true;
+        return;
+      }
+      step = 3; // Go to wishes after meal selection
+    } else {
+      step++;
+    }
+    
+    showValidationErrors = false;
   }
-  
-  showValidationErrors = false;
-}
 
   function prevStep() {
-  if (step > 1) {
-    showValidationErrors = false;
-    if (step === 2.5) {
-      step = 2; // Go back to attendance question
-    } else if (step === 3 && showMealOptions && attending === 'yes') {
-      step = 2.5; // Go back to meal selection
-    } else {
-      step--;
+    if (step > 1) {
+      showValidationErrors = false;
+      if (step === 2.5) {
+        step = 2; // Go back to attendance question
+      } else if (step === 3 && showMealOptions && attending === 'yes') {
+        step = 2.5; // Go back to meal selection
+      } else {
+        step--;
+      }
     }
   }
-}
 
-  function incrementGuest() {
-    guestCount++;
-  }
+  // function incrementGuest() {
+  //   if (guestCount < 2) { // ADDED: Limit to 2 guests max
+  //     guestCount++;
+  //   }
+  // }
 
-  function decrementGuest() {
-    if (guestCount > 1) guestCount--;
-  }
+  // function decrementGuest() {
+  //   if (guestCount > 1) guestCount--;
+  // }
 
   async function handleSubmit() {
     if (!guestId) {
@@ -200,11 +223,17 @@ $: mealOptions = invite?.meal_options || [];
         return;
       }
 
+      // UPDATED: Prepare meal preference data as JSON
+      let mealPreferenceData = null;
+      if (showMealOptions && attending === 'yes') {
+        mealPreferenceData = JSON.stringify({ guests: guestDetails });
+      }
+
       const updateData = {
         rsvp_status: attending === 'yes',
         guest_count: attending === 'yes' ? guestCount : 0,
         dietary_restriction: dietary,
-        meal_preference: showMealOptions ? mealPreference : null,
+        meal_preference: mealPreferenceData, // UPDATED: Store JSON data
         wishes,
         email,
         phone,
@@ -256,64 +285,50 @@ $: mealOptions = invite?.meal_options || [];
     }
   }
 
-  // const sendEmail = async () => {
-  //   try {
-  //     await emailjs.sendForm(
-  //       'service_17fltfd',
-  //       'template_l8lr5fh',
-  //       form,
-  //       'YxTaAeZpa_qVltT4A'
-  //     );
-  //   } catch (error) {
-  //     console.error('❌ Email send failed:', error);
-  //   }
-  // };
-function formatEventDate(dateString) {
-  if (!dateString) return '';
-  
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  });}
+  function formatEventDate(dateString) {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+  }
 
-// Add function to fetch event date with better debugging
-async function getEventDate() {
-  try {
-    console.log('🔍 Fetching events for invite.id:', invite.id);
-    
-    // events.invite_id should match invites.id
-    const { data: eventsData, error } = await supabase
-      .from('events')
-      .select('event_date, event_type')
-      .eq('invite_id', invite.id)  // Use invite.id, not invite.invite_id
-      .order('event_date', { ascending: true });
-    
-    console.log('🔍 Events query result:', eventsData);
-    
-    if (error) {
+  async function getEventDate() {
+    try {
+      console.log('🔍 Fetching events for invite.id:', invite.id);
+      
+      const { data: eventsData, error } = await supabase
+        .from('events')
+        .select('event_date, event_type')
+        .eq('invite_id', invite.id)
+        .order('event_date', { ascending: true });
+      
+      console.log('🔍 Events query result:', eventsData);
+      
+      if (error) {
+        console.error('❌ Error fetching event date:', error);
+        return null;
+      }
+      
+      if (eventsData && eventsData.length > 0) {
+        console.log('🔍 Found events, using first event date:', eventsData[0].event_date);
+        return eventsData[0].event_date;
+      }
+      
+      console.log('🔍 No events found for invite.id:', invite.id);
+      return null;
+      
+    } catch (error) {
       console.error('❌ Error fetching event date:', error);
       return null;
     }
-    
-    if (eventsData && eventsData.length > 0) {
-      console.log('🔍 Found events, using first event date:', eventsData[0].event_date);
-      return eventsData[0].event_date;
-    }
-    
-    console.log('🔍 No events found for invite.id:', invite.id);
-    return null;
-    
-  } catch (error) {
-    console.error('❌ Error fetching event date:', error);
-    return null;
   }
-}
 
-// Updated sendEmail function
-const sendEmail = async () => {
+  const sendEmail = async () => {
   try {
     const { data: guestData, error } = await supabase
       .from('guests')
@@ -326,30 +341,30 @@ const sendEmail = async () => {
       return;
     }
 
-    // Fetch the event date
     const eventDateString = await getEventDate();
     const eventDate = eventDateString ? 
       formatEventDate(eventDateString) : 
       'Event Date TBD';
 
+    // Get couple name from the invite object (already available)
+    const coupleName = invite?.client_name || 'the couple';
+
     const templateParams = {
-      // Template parameters that match your EmailJS template
-      to_email: email,        // This goes to "To email: {{to_email}}"
-      name: name,             // This goes to "From name: {{name}}"
-      email: email,           // This goes to "Reply To: {{email}}"
-      
-      // Content parameters for your HTML template
+      to_email: email,
+      name: name,
+      email: email,
       guest_name: name,
-      event_date: eventDate,  // Dynamic event date fetched from database
+      couple_name: coupleName, // Add this new parameter
+      event_date: eventDate,
       qr_code_url: guestData.qr_code_url,
     };
 
-    console.log('📧 Sending email to:', email); // Debug log
-    console.log('📧 Template params:', templateParams); // Debug log
+    console.log('📧 Sending email to:', email);
+    console.log('📧 Template params:', templateParams);
 
     await emailjs.send(
       'service_17fltfd',
-      'template_l8lr5fh',     // Replace with your actual template ID
+      'template_l8lr5fh',
       templateParams,
       'YxTaAeZpa_qVltT4A'
     );
@@ -374,13 +389,10 @@ const sendEmail = async () => {
 </script>
 
 <style lang="postcss">
-
   @reference "tailwindcss";
-  
   
   :global(:root) {
     background-color: theme(--color-gray-100);
-    /* Define default fonts as fallback */
     --font-display: 'Recoleta R', serif;
     --font-subheading: 'Recoleta R', serif;
     --font-button: 'Recoleta R', serif;
@@ -389,7 +401,6 @@ const sendEmail = async () => {
     --font-p: 'Mabry Light', serif;
     --font-smallcaption: 'Mabry Light', serif;
   }
-  
   
   :global(body) {
     margin: 0;
@@ -401,51 +412,51 @@ const sendEmail = async () => {
   }
 
   :global(.fade-in) {
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 1s ease-out, transform 1s ease-out;
-}
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 1s ease-out, transform 1s ease-out;
+  }
 
-:global(.fade-in.visible) {
-  opacity: 1;
-  transform: translateY(0);
-}
+  :global(.fade-in.visible) {
+    opacity: 1;
+    transform: translateY(0);
+  }
 
- .font-subheading {
+  .font-subheading {
     font-family: var(--font-subheading);
     font-size: 0.75rem;
     letter-spacing: 0.25em;
   }
 
- .font-display {
+  .font-display {
     font-family: var(--font-display);
     font-size: 4.75rem;
   }
 
-.font-display.dresscode{
+  .font-display.dresscode{
     font-size:2.25rem;
-}
+  }
 
- .font-button {
+  .font-button {
     font-family: var(--font-button);
     font-size: 0.75rem;
     letter-spacing: 0.25em;
   }
 
- .font-h3 {
+  .font-h3 {
     font-family: var(--font-h3);
     font-size: 1.25rem;
     letter-spacing: 0.025em;
   }
 
-.font-h3.eventtime {
+  .font-h3.eventtime {
     font-family: var(--font-h3);
     font-size: 1rem;
     margin-top: 4px;
     opacity: 90%;
   }
 
-.font-h2 {
+  .font-h2 {
     font-family: 'Recoleta L', serif;
     font-size: 1.75rem;
     letter-spacing: 0.050em;
@@ -469,13 +480,13 @@ const sendEmail = async () => {
     letter-spacing: 0.25em;
   }
 
-@media (max-width: 376px) {
-  .rsvp-section {
-   transform: scale(0.9); /* 15% smaller (100% - 15% = 85%) */
-  transform-origin: center center; /* Scale from center-top */
-  margin-top:4vh;
+  @media (max-width: 376px) {
+    .rsvp-section {
+      transform: scale(0.9);
+      transform-origin: center center;
+      margin-top:4vh;
+    }
   }
-}
 </style>
 
 <section class="min-h-[100vh] rsvp-section flex flex-col justify-center items-center px-8 md:px-16 lg:px-28 text-white">
@@ -582,17 +593,28 @@ const sendEmail = async () => {
           </div>
 
           {#if attending === 'yes'}
-            <div class="space-y-8">
-              <p class="mb-2 font-smallcaption uppercase">How many guests?</p>
-              <div class="flex gap-4 items-center">
-               <button class="bg-[#C7DDD8] text-black leading-[1] rounded-full w-9 h-9 flex items-center justify-center font-button font-bold transition hover:scale-[1.02]" on:click={decrementGuest}>-</button>
-                <span>{guestCount}</span>
-                <button class="bg-[#C7DDD8] text-black leading-[1] rounded-full w-9 h-9 flex items-center justify-center font-button font-bold transition hover:scale-[1.02]" on:click={incrementGuest}>+</button>
-              </div>
+         <div class="space-y-8">
+  <p class="mb-2 font-smallcaption uppercase">Are you bringing a plus one?</p>
+  <div class="flex gap-4">
+    <button
+      class={`flex-1 font-button uppercase border border-white px-4 py-4 rounded-md text-sm transition-all duration-200 ease-in
+            ${guestCount === 2 ? 'bg-[#C7DDD8] !text-black/90' : 'bg-transparent text-white'}`}
+      on:click={() => guestCount = 2}
+    >
+      Yes
+    </button>
+    <button
+      class={`flex-1 font-button uppercase border border-white px-4 py-4 rounded-md text-sm transition-all duration-200 ease-in
+            ${guestCount === 1 ? 'bg-[#C7DDD8] !text-black/90' : 'text-white'}`}
+      on:click={() => guestCount = 1}
+    >
+      No
+    </button>
+  </div>
 
-              <label class="font-smallcaption uppercase block text-white text-sm mb-2">Any allergies or special requests? (optional)</label>
-              <textarea class="w-full border border-white border-opacity-50 bg-black/30 text-white p-2 rounded focus:ring-1 focus:outline-none resize-none focus:ring-yellow-400" bind:value={dietary} placeholder=""></textarea>
-            </div>
+  <label class="font-smallcaption uppercase block text-white text-sm mb-2">Any allergies or special requests? (optional)</label>
+  <textarea class="w-full border border-white border-opacity-50 bg-black/30 text-white p-2 rounded focus:ring-1 focus:outline-none resize-none focus:ring-yellow-400" bind:value={dietary} placeholder=""></textarea>
+</div>
           {/if}
 
           <div class="flex justify-between">
@@ -602,52 +624,77 @@ const sendEmail = async () => {
         </div>
       {/if}
 
+      <!-- UPDATED: Dynamic Meal Selection Step 2.5 -->
       {#if step === 2.5 && showMealOptions}
-  <div class="space-y-6">
-    <div>
-      <p class="mb-4 font-smallcaption uppercase">Choose Your Main (4-Course Meal)</p>
-      <div class="space-y-3">
-        {#each mealOptions as option, index}
-          <button
-            class={`w-full text-left font-h3 border border-white px-4 py-4 rounded-md transition-all duration-200 ease-in
-                  ${mealPreference === option ? 'bg-[#C7DDD8] !text-black/90' : 'bg-transparent text-white hover:bg-white/10'}`}
-            on:click={() => mealPreference = option}
-          >
-            {index + 1}. {option}
-          </button>
-        {/each}
-      </div>
-      
-      {#if showValidationErrors && !mealPreference}
-        <p class="text-red-400 text-sm opacity-90 font-smallcaption mt-2">Please select a meal option</p>
-      {/if}
-    </div>
+        <div class="space-y-6">
+          <p class="mb-4 font-smallcaption uppercase">Meal Selection for Your Party</p>
+          
+          {#each Array(guestCount) as _, index}
+            <div class="border border-white/30 p-4 rounded-md space-y-3">
+              <h4 class="font-h3 text-center">
+                {index === 0 ? 'You' : `Your Plus One`}
+              </h4>
+              
+              <!-- Name input for each guest -->
+              <input 
+                class="w-full border border-white/50 bg-black/30 text-white p-2 rounded focus:ring-1 focus:outline-none
+                      {showValidationErrors && (!guestDetails[index]?.name || !guestDetails[index]?.name.trim()) ? 'border-red-500' : 'border-white/50'}"
+                placeholder={index === 0 ? 'Please enter your full name' : 'Please enter their full name'}
+                bind:value={guestDetails[index].name}
+              />
+              
+              <!-- Meal selection buttons -->
+              <div class="space-y-2">
+                {#each mealOptions as option}
+                  <button
+                    class={`w-full text-left px-3 py-2 rounded border transition font-h3
+                          ${guestDetails[index].meal === option ? 'bg-[#C7DDD8] text-black' : 'border-white/50 text-white hover:bg-white/10'}`}
+                    on:click={() => {
+                      guestDetails[index].meal = option;
+                      guestDetails = [...guestDetails]; // Trigger reactivity
+                    }}
+                  >
+                    {option}
+                  </button>
+                {/each}
+              </div>
+              
+              <!-- Individual dietary restriction -->
+              <input 
+                class="w-full border border-white/50 bg-black/30 text-white p-2 rounded text-sm focus:ring-1 focus:outline-none"
+                placeholder="Dietary Restrictions (optional)"
+                bind:value={guestDetails[index].dietary}
+              />
+              
+              {#if showValidationErrors && (!guestDetails[index]?.name || !guestDetails[index]?.name.trim() || !guestDetails[index]?.meal)}
+                <p class="text-red-400 text-sm opacity-90 font-smallcaption">Name and meal selection required</p>
+              {/if}
+            </div>
+          {/each}
 
-    <div class="flex justify-between">
-      <button on:click={prevStep} class="font-smallcaption uppercase border border-white text-white py-4 px-6 rounded-md hover:bg-white hover:text-black transition">
-        Back
-      </button>
-      <button on:click={nextStep} class="font-button uppercase rounded-md py-4 px-6 transition text-black/90 bg-[#C7DDD8] hover:bg-[#b5d0c9]">
-        Next
-      </button>
-    </div>
-  </div>
-{/if}
+          <div class="flex justify-between">
+            <button on:click={prevStep} class="font-smallcaption uppercase border border-white text-white py-4 px-6 rounded-md hover:bg-white hover:text-black transition">
+              Back
+            </button>
+            <button on:click={nextStep} class="font-button uppercase rounded-md py-4 px-6 transition text-black/90 bg-[#C7DDD8] hover:bg-[#b5d0c9]">
+              Next
+            </button>
+          </div>
+        </div>
+      {/if}
 
       <!-- Step 3 -->
       {#if step === 3}
-         <div class="space-y-4"> <!-- Changed from <form> to <div> -->
-    <label class="font-smallcaption uppercase block text-white text-sm mb-2">Your Wishes</label>
-    <textarea
-      class="w-full min-h-[140px] border border-white border-opacity-50 bg-black/30 text-white p-2 rounded focus:ring-1 focus:outline-none resize-none focus:ring-yellow-400"
-      bind:value={wishes}
-      placeholder="Say something nice..."
-    ></textarea>
-
-         
+        <div class="space-y-4">
+          <label class="font-smallcaption uppercase block text-white text-sm mb-2">Your Wishes</label>
+          <textarea
+            class="w-full min-h-[140px] border border-white border-opacity-50 bg-black/30 text-white p-2 rounded focus:ring-1 focus:outline-none resize-none focus:ring-yellow-400"
+            bind:value={wishes}
+            placeholder="Say something nice..."
+          ></textarea>
 
           <div class="flex justify-between">
-             <button on:click={prevStep} class="font-button uppercase border border-white text-white py-4 px-6 rounded-md hover:bg-white hover:text-black transition">
+            <button on:click={prevStep} class="font-button uppercase border border-white text-white py-4 px-6 rounded-md hover:bg-white hover:text-black transition">
               Back
             </button>
 
@@ -674,12 +721,9 @@ const sendEmail = async () => {
           alt={submissionError ? "Failed" : "Success"}
           class="w-20 h-20"
         />
-        <p class={`font-smallcaption font-bold uppercase text-center ${submissionError ? 'text-red-400' : 'text-white'}`}>
-          {submissionError ? 'RSVP failed to submit' : 'RSVP received! We’ve sent you a confirmation email with your QR code.'}
+        <p class="font-smallcaption font-bold uppercase text-center {submissionError ? 'text-red-400' : 'text-white'}">
+          {submissionError || 'RSVP received! We sent you a confirmation email with your QR code.'}
         </p>
-        <!-- {#if guest?.qr_code_url}
-          <img src={guest.qr_code_url} alt="QR Code" class="w-32 h-32" />
-        {/if} -->
       </div>
     {/if}
   </div>
