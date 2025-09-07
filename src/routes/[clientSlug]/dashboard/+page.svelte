@@ -1583,28 +1583,21 @@ onMount(async () => {
 </svelte:head>
 
 <style lang="postcss">
-@import 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'
   @reference "tailwindcss";
+@import 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'
 
-/* ============================================================================
-   FONTS & ANIMATIONS
-   ============================================================================ *
-
-/* ============================================================================
-   GLOBAL STYLES
-   ============================================================================ */
 :root {
   /* Brand */
   --brand: #111111;
   --brand-ink: #000000;
 
   /* Surfaces & backgrounds */
---bg: #FAFAF8;
+  --bg: #FAFAF8;
   --surface: #FFFFFF;
   --surface-variant: #F6F6F4;
 
   /* Borders & outlines */
-   --border-subtle: #ABABAB;
+  --border-subtle: #ABABAB;
   --border: #d4d4d4;
 
   /* Text */
@@ -1659,10 +1652,29 @@ onMount(async () => {
   --elev-1: 0 1px 2px rgba(0,0,0,.06), 0 1px 1px rgba(0,0,0,.04);
   --elev-2: 0 4px 12px rgba(0,0,0,.08);
 }
+
+
+/* ============================================================================
+   FONTS & ANIMATIONS
+   ============================================================================ */
+
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   GLOBAL STYLES
+   ============================================================================ */
+:global(html) {
+    -webkit-font-smoothing: antialiased; 
+    -moz-osx-font-smoothing: grayscale; 
+}
+
 :global(body) {
     margin: 0;
     padding: 0;
-    background: var(--bg);
+    background: #FAFAF8;
 }
 
 /* ============================================================================
@@ -1679,13 +1691,13 @@ onMount(async () => {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: var(--bg);
+    background: #FAFAF8;
    
 }
 
-.dashboard-content{
-  padding: 4rem 6rem;
-  border-bottom: 1px solid var(--border-subtle);
+.dashboard-content {
+    padding: 4rem 6rem;
+    border-bottom:1px solid #ababab;
 }
 
 /* .breadcrumb {
@@ -1694,7 +1706,7 @@ onMount(async () => {
     position: sticky;
     top: 0;
     z-index: 10;
-    border-bottom:0.75px solid var(--border-subtle)
+    border-bottom:0.75px solid #ABABAB
 }
 
 .breadcrumb-path {
@@ -1710,7 +1722,7 @@ onMount(async () => {
   justify-content: center;
   height: 70vh; 
   text-align: center;
-  border-bottom: 0.75px solid var(--border-subtle); 
+  border-bottom: 0.75px solid #ABABAB; 
 }
 
 .empty-content {
@@ -1769,9 +1781,16 @@ onMount(async () => {
 /* ============================================================================
    SIDEBAR
    ============================================================================ */
-.sidebar{
-  background: var(--bg);
-  border-right: 0.75px solid var(--border-subtle);
+.sidebar {
+    width: 15vw;
+    background: #FAFAF8;
+    border-right: 0.75px solid #ABABAB;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    transition: width 300ms ease-in 100ms;
 }
 
 .sidebar.collapsed {
@@ -1796,7 +1815,7 @@ onMount(async () => {
 }
 
 .sidebar-toggle:hover {
-    background: var(--surface-variant);
+    background: #e8e8e8;
     border-radius: 4px;
     color: #000;
     transition: background-color 300ms ease-in 100ms;
@@ -1868,7 +1887,7 @@ onMount(async () => {
 }
 
 .sidebar.collapsed .nav-item:hover {
-    background-color: var(--surface-variant);
+    background-color: #e8e8e8;
     border-radius: 8px;
 }
 
@@ -1958,7 +1977,7 @@ onMount(async () => {
    ============================================================================ */
 .metrics-section {
     margin-bottom: 32px;
-    /* border-bottom:0.75px solid var(--border-subtle) */
+    /* border-bottom:0.75px solid #ABABAB */
     
 }
 
@@ -1975,23 +1994,27 @@ onMount(async () => {
     margin-bottom: 30px;
 }
 
-.section-title{
-  font-family: var(--ff-sans);
-  font-size: var(--fs-title);
-  color: var(--text);
+.section-title {
+    font-family: 'DM Sans', sans-serif;
+    font-size:var(--fs-title);
+    font-weight: 500;
+    color: #111;
+    /* margin: 2rem 0 0 0; */
 }
 
-.section-description{
-  font-family: var(--ff-sans);
-  font-size: var(--fs-caption);
-  color: var(--text-muted);
-  opacity: .8;
+.section-description {
+    font-family: 'DM Sans', sans-serif;
+    font-size:var(--fs-body);
+    font-weight: 300;
+    letter-spacing:0.001em;
+    color: #444;
+    opacity: 0.8;
 }
 
 .uploadguests-btn{
        padding:24px 48px;
     border-radius: 999px;
-   border:1px solid var(--border-subtle);
+   border:1px solid #ababab;
    font-family:'DM Sans', sans-serif;
    font-size:1.5em;
     /* background: #D9D9D9; */
@@ -2021,24 +2044,37 @@ onMount(async () => {
     gap: 20px;
 }
 
-.metric-card{
-  /* Keep gradient if desired, or use a flat token surface: */
-  background: var(--surface);
-  border-radius: var(--radius-card);
-  padding: var(--sp-8);
-  box-shadow: var(--elev-1);
+.metric-card {
+    background: linear-gradient(220deg, #cdd1ff 0%, #c6cbff 100%);
+    border-radius: 20px;
+    padding: 2rem;
+    border: none;
+    text-align:left;
+    transition: all 0.2s ease-in-out;
 }
 
+/* .metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+} */
 
-.metric-label{
-  font-family: var(--ff-sans);
-  font-size: 1.875em;
-  color: var(--text);
-  opacity: .7;
+.metric-label {
+    font-family:'DM Sans',sans-serif;
+    font-size: 1.875em;
+    font-weight:500;
+    letter-spacing:0.015em;
+    color: #000;
+    opacity:70%;
+    
+    display:flex;
+    align-items:flex-start;
 }
 
-.metric-value{
-  color: var(--text);
+.metric-value {
+    font-size: 5.5em; /* smaller, closer to screenshot */
+    font-weight: 600;
+    color: #000;
+   
 }
 
 /* .metric-subtitle {
@@ -2071,7 +2107,7 @@ onMount(async () => {
     width: 4rem;
     height: 4rem;
     border-radius: 12px;
-   border:0.75px solid var(--border-subtle);
+   border:0.75px solid #ababab;
     /* background: #D9D9D9; */
     display: flex;
     align-items: center;
@@ -2126,12 +2162,12 @@ onMount(async () => {
 
 
 
-.table-container{
-  border-radius: var(--radius);
-  padding: var(--sp-12);
-  border: 0.75px solid var(--border-subtle);
-  background: var(--surface);
-  box-shadow: var(--elev-0);
+.table-container {
+    
+    border-radius: 10px;
+    padding: 3rem;
+    margin-bottom: 24px;
+    border: 0.75px solid #ABABAB;
 }
 
 .table-actions {
@@ -2166,7 +2202,7 @@ onMount(async () => {
 }
 
 .data-table tr:hover td {
-    background: var(--surface-variant);
+    background: #E8E8E8;
 }
 
 .data-table tr.clickable-row {
@@ -2749,7 +2785,7 @@ onMount(async () => {
 }
 
 .modal-content {
-    background: var(--bg);
+    background: #FAFAF8;
     border-radius: 12px;
     padding: 24px;
     max-width: 500px;
@@ -3002,7 +3038,7 @@ onMount(async () => {
     color: black;
     font-weight: 500;
     text-decoration:underline;
-    text-decoration-color:var(--border-subtle);
+    text-decoration-color:#ababab;
     text-underline-offset:4px;
     opacity:50%;
 }
@@ -3920,7 +3956,7 @@ onMount(async () => {
                                     {previewMessage.length} characters
                                 </div>
                                <div class="change-globaltemp">
-    <button on:click={openSettingsModal} style="background: none; border: none; padding: 0; cursor: pointer; color: black; font-size: 1em; font-weight: 500; text-decoration: underline; text-decoration-color: var(--border-subtle); text-underline-offset: 4px; opacity: 50%;">
+    <button on:click={openSettingsModal} style="background: none; border: none; padding: 0; cursor: pointer; color: black; font-size: 1em; font-weight: 500; text-decoration: underline; text-decoration-color: #ababab; text-underline-offset: 4px; opacity: 50%;">
         Click to change your global template here
     </button>
 </div>
