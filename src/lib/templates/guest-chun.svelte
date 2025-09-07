@@ -637,7 +637,7 @@ function preloadAudio(src) {
     "but carried and strengthened by the hearts around them.<br>而是被所有亲友的心意与祝福托起。",
     "Thank you for coming,<br>谢谢你愿意来,",
     "thank you for standing by us.<br>谢谢你一直都在。",
-    "It's been a while but we can't wait to see you at the wedding.<br>最后想说,<br>久不见,<br>我们婚礼见! ",
+    "It's been a while but we can't wait to see you at the wedding.<br>最后想说,<br>好久不见,<br>我们婚礼见<3 ",
   ];
   
 
@@ -1704,7 +1704,8 @@ function handleVisibilityChange() {
       <div class="absolute inset-0 bg-black/40"></div>
     </div>
     <h1 class="font-h2 text-white mb-8">
-      Dearest, {guest.full_name}
+      Dearest, {guest.full_name}<br>
+      Hi &lt;3, 亲爱的你
     </h1>
     <button 
       on:click={unlockScrollAndScrollDown}
