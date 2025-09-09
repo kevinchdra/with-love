@@ -612,8 +612,8 @@
     </button>
   </div>
 
-  <label class="font-smallcaption uppercase block text-white text-sm mb-2">Any allergies or special requests? (optional)</label>
-  <textarea class="w-full border border-white border-opacity-50 bg-black/30 text-white p-2 rounded focus:ring-1 focus:outline-none resize-none focus:ring-yellow-400" bind:value={dietary} placeholder=""></textarea>
+  <!-- <label class="font-smallcaption uppercase block text-white text-sm mb-2">Any allergies or special requests? (optional)</label>
+  <textarea class="w-full border border-white border-opacity-50 bg-black/30 text-white p-2 rounded focus:ring-1 focus:outline-none resize-none focus:ring-yellow-400" bind:value={dietary} placeholder=""></textarea> -->
 </div>
           {/if}
 
@@ -627,7 +627,7 @@
       <!-- UPDATED: Dynamic Meal Selection Step 2.5 -->
       {#if step === 2.5 && showMealOptions}
         <div class="space-y-6">
-          <p class="mb-4 font-smallcaption uppercase">Meal Selection for Your Party</p>
+          <p class="mb-4 font-smallcaption uppercase">Choose your main course (4 course meal)</p>
           
           {#each Array(guestCount) as _, index}
             <div class="border border-white/30 p-4 rounded-md space-y-3">

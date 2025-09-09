@@ -29,19 +29,7 @@ onMount(async () => {
         clientData = invite;
         
         // Fetch updated guest data
-        const { data: guest, error } = await supabase
-            .from('guests')
-            .select(`
-                *,
-                invites (
-                    client_name,
-                    event_title,
-                    event_date,
-                    location
-                )
-            `)
-            .eq('guest_id', guestId)
-            .single();
+       const { data: guest, error } = await supabase.from('guests').select('*').eq('guest_id', guestId).single();
             
         if (error || !guest) {
             errorMessage = 'Guest not found';
@@ -84,7 +72,8 @@ function formatTime(timestamp) {
 }
 </script>
 
-<style>
+<style lang="postcss">
+@reference tailwindcss;
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
 
 :global(html) {

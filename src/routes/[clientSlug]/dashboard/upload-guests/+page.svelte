@@ -210,7 +210,7 @@ onMount(async () => {
 });
 </script>
 
-<style>
+<style lang="postcss">
 /* Import DM Sans font */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 
@@ -805,7 +805,7 @@ onMount(async () => {
 
 <div class="dashboard-container">
     <!-- Sidebar -->
-    <aside class="sidebar" class:collapsed={sidebarCollapsed}>
+    <!-- <aside class="sidebar" class:collapsed={sidebarCollapsed}>
         <div class="sidebar-header">
             <button class="sidebar-toggle" on:click={() => sidebarCollapsed = !sidebarCollapsed}>
                 <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -876,15 +876,19 @@ onMount(async () => {
                 </div>
             </div>
         </nav>
-    </aside>
+    </aside> -->
 
     <!-- Main Content -->
     <main class="main-content">
-        <!-- Breadcrumb -->
-        <div class="breadcrumb">
-            <div class="breadcrumb-path">Dashboard / Upload Guest List</div>
-        </div>
-
+  <!-- Back to Dashboard -->
+  <div class="m-6 px-6">
+    <a 
+      href="/{clientSlug}/dashboard" 
+      class="text-sm font-medium text-primary-600 hover:underline"
+    >
+      ← Back to Dashboard
+    </a>
+  </div>
         <!-- Content -->
         <div class="content">
             {#if isProcessing}

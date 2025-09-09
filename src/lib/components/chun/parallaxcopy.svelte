@@ -98,10 +98,6 @@
   }
   
   onMount(async () => {
-    const baseSection = document.querySelector('.section.base');
-  if (baseSection) {
-    baseSection.style.backgroundColor = '#FBF9EF';
-  }
     try {
       // Load images first
       await loadImagesFromSupabase();
@@ -393,35 +389,20 @@
     });
     
     // Background color change
-// Background color changes per section
-const backgroundSection = document.querySelector('.section.base');
-if (backgroundSection) {
-  const sectionColors = [
-    '#FBF9EF','#F5F1E8','#EFE8D8','#E8DCC8','#E0D0B8',
-    '#D8C4A8','#D0B898','#C8AC88','#C0A078','#B89468',
-    '#B08858','#A87C48','#A07038','#986428'
-  ];
-
-  // One timeline that spans the entire masterScroll
-  const tl = gsap.timeline({
-    defaults: { ease: "none" },
-    scrollTrigger: {
-      trigger: document.querySelector('.master-scroll'),
-      start: "top top",
-      end: "bottom bottom",
-      scrub: 1,
-      invalidateOnRefresh: true
+    const backgroundSection = document.querySelector('.section.base');
+    if (backgroundSection && masterScroll) {
+      ScrollTrigger.create({
+        trigger: masterScroll,
+        start: "top bottom",
+        end: "bottom top",
+        scrub: 1,
+        animation: gsap.fromTo(backgroundSection, 
+          { backgroundColor: '#FBF9EF' },
+          { backgroundColor: '#D4CBAF', ease: 'none' }
+        )
+      });
     }
-  });
-
-  // Evenly distribute the color steps across the timeline
-  const steps = sectionColors.length - 1;
-  gsap.set(backgroundSection, { backgroundColor: sectionColors[0] });
-  sectionColors.forEach((color, i) => {
-    if (i === 0) return;
-    tl.to(backgroundSection, { backgroundColor: color }, i / steps);
-  });
-}
+    
     // Refresh ScrollTrigger after DOM updates
     ScrollTrigger.refresh();
   }
@@ -457,59 +438,94 @@ if (backgroundSection) {
       </div>
       <div class="images-scroll-block">
         <div class="master-scroll-images">
-          <!-- Images start appearing from the second text line (index 1) -->
-          <div class="scroll-image-large _1" style="margin-top: 120vh;">
+          <div class="scroll-image-large _2">
             {#if imageUrls.length > 0}
               <img src={getImageUrl(0)} loading="lazy" alt="" class="image-cover">
             {:else}
-              <div class="w-full h-full bg-[#F5F1E8]"></div>
+              <div class="w-full h-full bg-gray-800"></div>
             {/if}
           </div>
-          <div class="scroll-image-large _2" style="margin-top: 60vh;">
+          
+          <div class="scroll-image-large _3">
             {#if imageUrls.length > 0}
               <img src={getImageUrl(1)} loading="lazy" alt="" class="image-cover">
             {:else}
               <div class="w-full h-full bg-gray-800"></div>
             {/if}
           </div>
-          <div class="scroll-image-large _3" style="margin-top: 60vh;">
+          <div class="scroll-image-small _1">
             {#if imageUrls.length > 0}
               <img src={getImageUrl(2)} loading="lazy" alt="" class="image-cover">
             {:else}
               <div class="w-full h-full bg-gray-800"></div>
             {/if}
-          </div>
-          <div class="scroll-image-large _2" style="margin-top: 60vh;">
+          </div> 
+          
+          <div class="scroll-image-large _2">
             {#if imageUrls.length > 0}
               <img src={getImageUrl(3)} loading="lazy" alt="" class="image-cover">
             {:else}
               <div class="w-full h-full bg-gray-800"></div>
             {/if}
           </div>
-          <div class="scroll-image-large _4" style="margin-top: 60vh;">
+          <div class="scroll-image-large _3">
             {#if imageUrls.length > 0}
               <img src={getImageUrl(4)} loading="lazy" alt="" class="image-cover">
             {:else}
               <div class="w-full h-full bg-gray-800"></div>
             {/if}
           </div>
-            <div class="scroll-image-large _2" style="margin-top: 60vh;">
+          
+          <div class="scroll-image-large _2">
             {#if imageUrls.length > 0}
               <img src={getImageUrl(5)} loading="lazy" alt="" class="image-cover">
             {:else}
               <div class="w-full h-full bg-gray-800"></div>
             {/if}
           </div>
-           <div class="scroll-image-large _3" style="margin-top: 60vh;">
+         
+          <div class="scroll-image-large _3">
             {#if imageUrls.length > 0}
-              <img src={getImageUrl(5)} loading="lazy" alt="" class="image-cover">
+              <img src={getImageUrl(6)} loading="lazy" alt="" class="image-cover">
             {:else}
               <div class="w-full h-full bg-gray-800"></div>
             {/if}
           </div>
-       
-       
-       
+          <div class="scroll-image-large _2">
+            {#if imageUrls.length > 0}
+              <img src={getImageUrl(7)} loading="lazy" alt="" class="image-cover">
+            {:else}
+              <div class="w-full h-full bg-gray-800"></div>
+            {/if}
+          </div>
+          <div class="scroll-image-large _3">
+            {#if imageUrls.length > 0}
+              <img src={getImageUrl(8)} loading="lazy" alt="" class="image-cover">
+            {:else}
+              <div class="w-full h-full bg-gray-800"></div>
+            {/if}
+          </div>
+          <div class="scroll-image-large _2">
+            {#if imageUrls.length > 0}
+              <img src={getImageUrl(9)} loading="lazy" alt="" class="image-cover">
+            {:else}
+              <div class="w-full h-full bg-gray-800"></div>
+            {/if}
+          </div>
+          <div class="scroll-image-small _2">
+            {#if imageUrls.length > 0}
+              <img src={getImageUrl(10)} loading="lazy" alt="" class="image-cover">
+            {:else}
+              <div class="w-full h-full bg-gray-800"></div>
+            {/if}
+          </div>
+          <div class="scroll-image-large _2">
+            {#if imageUrls.length > 0}
+              <img src={getImageUrl(11)} loading="lazy" alt="" class="image-cover">
+            {:else}
+              <div class="w-full h-full bg-gray-800"></div>
+            {/if}
+          </div>
         </div>
       </div>
     </div>
@@ -517,14 +533,15 @@ if (backgroundSection) {
 </section>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cabin:ital,wght@0,400..700;1,400..700&family=Martel+Sans:wght@200;300;400;600;700;800;900&family=Outfit:wght@100..900&display=swap');
-
-
+  @import url('https://fonts.googleapis.com/css2?family=Martel+Sans:wght@200;300;400;600;700;800;900&display=swap');
   /* CSS Variables */
   :global(:root) {
-    --font-heading-sans: "Fustat", sans-serif;
-    --font-heading-serif: "Cabin", sans-serif;
-    --font-ui: "Fustat", sans-serif;
+    --color-bg-1: #ebe8db;
+    --color-dark: #2a2119;
+    --color-dark-32: color-mix(in srgb, var(--color-dark) 32%, transparent);
+    --font-heading-sans: "Martel Sans", sans-serif;
+    --font-heading-serif: "Martel Sans", sans-serif;
+    --font-ui: "Martel Sans", sans-serif;
     --font-weight-medium: 500;
     --font-weight-normal: 400;
     --spacing-site-padding-main: 24px;
@@ -544,7 +561,7 @@ if (backgroundSection) {
     z-index: 2;
     padding-top: var(--spacing-80);
     padding-bottom: var(--spacing-80);
-   
+    background-color: var(--color-bg-1);
     position: relative;
   }
 
@@ -660,7 +677,7 @@ if (backgroundSection) {
 
   .text-h2 {
     font-family: var(--font-heading-serif);
-    font-size: 2em;
+    font-size: 64px;
     line-height: 110%;
     font-weight: var(--font-weight-normal);
     letter-spacing: -4px;
@@ -721,10 +738,10 @@ if (backgroundSection) {
     flex-flow: column;
     margin-bottom: 20px;
     display: flex;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
+     position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   }
 
   .image-cover {
@@ -733,46 +750,38 @@ if (backgroundSection) {
     height: 100%;
   }
 
-  /* Scroll images - All centered */
+  /* Scroll images */
   .scroll-image-large {
     border-radius: var(--radius-3);
     width: 356px;
     height: 356px;
     overflow: hidden;
     will-change: transform;
-    /* Center all large images horizontally */
-    margin-left: auto;
-    margin-right: auto;
-    position: relative;
-    left: 50%;
-    transform: translateX(-50%);
   }
 
   .scroll-image-large._1 {
-    margin-top: 20vh;
-   
+    margin-left: 5%;
   }
 
   .scroll-image-large._2 {
-    margin-top: 60vh;
-   
+    margin-top: 40vh;
+    margin-left: 7%;
   }
 
   .scroll-image-large._3 {
-    margin-top: 60vh;
-     rotate: -4deg;
+    margin-top: 20vh;
+    margin-left: auto;
   }
-
-  .scroll-image-large._4 {
-    margin-top: 60vh;
-    rotate: 4deg;
-  }
-
 
   .scroll-image-large.heading-404 {
     margin-top: -80px;
+    margin-left: 7%;
   }
 
+  .scroll-image-large._4 {
+    order: -1;
+    margin-left: auto;
+  }
 
   .scroll-image-small {
     border-radius: var(--radius-3);
@@ -938,15 +947,10 @@ if (backgroundSection) {
     .scroll-image-large {
       width: 280px;
       height: 280px;
-      /* Maintain centering in tablet view */
-      margin-left: auto;
-      margin-right: auto;
-      left: 50%;
-      transform: translateX(-50%);
     }
 
     .scroll-image-large._3 {
-      margin-top: 60vh;
+      margin-top: 300px;
     }
 
     .scroll-image-vertical {
@@ -1005,10 +1009,9 @@ if (backgroundSection) {
     }
 
     .text-h2 {
-      font-size: 2em;
+      font-size: 32px;
       letter-spacing: -1px;
-      line-height: 110%;
-     
+      line-height: 120%;
     }
 
     .scroll-wrapper-single {
@@ -1026,17 +1029,13 @@ if (backgroundSection) {
     }
 
     .scroll-image-large {
-      width: 232px;
-      height: 293px; /* Portrait ratio: 3:4 */
-      /* Move images 25% to the left from center */
-      margin-left: auto;
-      margin-right: auto;
-      position: relative;
-      left:30%;
-      opacity:90%;
+      width: 182px;
+      height: 182px;
     }
 
-    
+    .scroll-image-large._3 {
+      margin-top: 250px;
+    }
 
     .scroll-image-vertical {
       width: 132px;

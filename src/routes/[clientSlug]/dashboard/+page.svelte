@@ -23,8 +23,6 @@ let currentRoute = 'Dashboard';
 let guests = [];
 let gifts = [];
 
-// UI State
-let sidebarCollapsed = false;
 
 // ============================================================================
 // SEARCH & FILTER STATE
@@ -47,6 +45,14 @@ let showSortMenu = false;
 let showFilterMenu = false;
 let hoveredAction = null;
 let expandedAction = null;
+
+
+// UI State
+
+let editingGuestId = null;
+let editGuestDraft = null;
+let isSavingGuest = false;
+let guestSaveError = '';
 
 // ============================================================================
 // SELECTION STATE
@@ -79,9 +85,10 @@ let selectedGiftGroupForPreview = false;
 // Message Modals
 let showMessagePreviewModal = false;
 
-let showSettingsModal = false;
+
 
 // Settings Modal
+let showSettingsModal = false;
 let showMetricsSettings = false;
 let isSavingMetrics = false;
 let isSavingTemplates = false;
@@ -256,14 +263,7 @@ async function loadDashboardData() {
             .from('events')
             .select('*') // Select all fields to see what's available
             .eq('invite_id', invite.id);
-            
-    //     console.log('Event query result:', { 
-    //         event, 
-    //         eventError,
-    //         inviteId: invite.id,
-    //         eventCount: event?.length 
-    //     }
-    // );
+   
         
         // Try different approaches if the first one fails
         if (!event || event.length === 0) {
@@ -281,7 +281,7 @@ async function loadDashboardData() {
             const { data: eventAlt2, error: eventError2 } = await supabase
                 .from('events')
                 .select('*')
-                .eq('event_id', invite.id);
+                .eq('id', invite.id);
                 
             // console.log('Alternative query 2 (event_id = invite.id):', { eventAlt2, eventError2 });
             
@@ -305,6 +305,14 @@ async function loadDashboardData() {
             ...invite,
             events: finalEvent || {}
         };
+
+        if (invite?.message_templates && typeof invite.message_templates === 'object') {
+            messageTemplates = {
+                invite: invite.message_templates.invite ?? messageTemplates.invite,
+                thankYou: invite.message_templates.thankYou ?? messageTemplates.thankYou,
+            };
+            tempMessageTemplates = { ...messageTemplates };
+            }
         
         console.log('Final clientData structure:', {
             invite_id: clientData.id,
@@ -443,6 +451,7 @@ function calculatePercent(key) {
 }
 
 
+
 //Handle Buttons
 
 function handleUploadGuests() {
@@ -460,16 +469,30 @@ function processGuests(guests, search, sortField, sortDirection, rsvpFilter, che
     let result = [...guests];
     
     // Apply search filter
-    if (search) {
-        const searchLower = search.toLowerCase();
-        result = result.filter(guest => {
-            const name = (guest.full_name || '').toLowerCase();
-            const phone = (guest.phone || '').toLowerCase();
-            const email = (guest.email || '').toLowerCase();
-            return name.includes(searchLower) || phone.includes(searchLower) || email.includes(searchLower);
-        });
-    }
-    
+if (search && search.trim() !== "") {
+  const tokens = queryTokens(search);
+
+  result = result.filter((guest) => {
+    const name = guest.full_name || "";
+    const phone = guest.phone || "";
+    const email = guest.email || "";
+
+    // Numeric query: match phone digits forgivingly
+    const numericQuery = search.replace(/\D/g, "");
+    const phoneDigits = phone.replace(/\D/g, "");
+    const phoneMatches = numericQuery.length >= 3
+      ? phoneDigits.includes(numericQuery)
+      : false;
+
+    // Token AND across name/phone/email (normalized)
+    const textMatches =
+      tokensMatch(name, tokens) ||
+      tokensMatch(phone, tokens) ||
+      tokensMatch(email, tokens);
+
+    return textMatches || phoneMatches;
+  });
+}
     // Apply RSVP filter
     if (rsvpFilter !== 'all') {
         result = result.filter(guest => {
@@ -569,6 +592,19 @@ function processGiftsGroupedByGuest(gifts, search, viewMode) {
     
     return Object.values(groupedByGuest);
 }
+
+$: baseNotSent = guests.filter((g) => !g.invite_sent);
+$: baseSent    = guests.filter((g) =>  g.invite_sent);
+
+// After processGuests computed values
+$: noMatchesNotSent = (searchTermNotSent && searchTermNotSent.trim() !== "" && baseNotSent.length > 0 && guestsNotSent.length === 0);
+$: noMatchesSent    = (searchTermSent    && searchTermSent.trim()    !== "" && baseSent.length    > 0 && guestsSent.length    === 0);
+
+// Also useful to know when there is simply no data yet (regardless of search)
+$: emptyNotSentData = baseNotSent.length === 0;
+$: emptySentData    = baseSent.length === 0;
+
+
 
 // ============================================================================
 // GUEST MANAGEMENT
@@ -802,6 +838,81 @@ function selectAllSentGuests() {
     selectedGuestsSent = selectedGuestsSent;
 }
 
+function extractMeals(mealPref) {
+  try {
+    if (!mealPref) return [];
+    // Supabase often gives JSONB as an object already; but be safe
+    const obj = typeof mealPref === 'string' ? JSON.parse(mealPref) : mealPref;
+    const meals = (obj?.guests ?? [])
+      .map(g => g?.meal)
+      .filter(Boolean);
+    // de-dupe (optional)
+    return [...new Set(meals)];
+  } catch {
+    return [];
+  }
+}
+
+//Edit guests on table//
+function startEditGuest(guest) {
+  editingGuestId = guest.guest_id;
+  editGuestDraft = {
+    full_name: guest.full_name || '',
+    email: guest.email || '',
+    phone: guest.phone || '',
+    guest_count: guest.guest_count ?? 1,
+    dietary_restriction: guest.dietary_restriction || '',
+    // ✅ treat as booleans
+    rsvp_status: !!guest.rsvp_status,
+    checked_in: !!guest.checked_in
+  };
+  guestSaveError = '';
+}
+
+function cancelEditGuest() {
+  editingGuestId = null;
+  editGuestDraft = null;
+  guestSaveError = '';
+}
+
+async function saveGuestEdits() {
+  if (!editingGuestId || !editGuestDraft?.full_name?.trim()) {
+    guestSaveError = 'Name is required.';
+    return;
+  }
+
+  try {
+    isSavingGuest = true;
+    const payload = {
+      full_name: editGuestDraft.full_name.trim(),
+      email: editGuestDraft.email?.trim() || null,
+      phone: editGuestDraft.phone?.trim() || null,
+      guest_count: Number(editGuestDraft.guest_count) || 1,
+      dietary_restriction: editGuestDraft.dietary_restriction?.trim() || null,
+      // ✅ include booleans in update
+      rsvp_status: Boolean(editGuestDraft.rsvp_status),
+      checked_in: Boolean(editGuestDraft.checked_in)
+    };
+
+    const { error } = await supabase
+      .from('guests')
+      .update(payload)
+      .eq('guest_id', editingGuestId);
+
+    if (error) throw error;
+
+    await loadDashboardData();
+    cancelEditGuest();
+  } catch (e) {
+    console.error('Failed to save guest edits:', e);
+    guestSaveError ='Failed to save changes.';
+  } finally {
+    isSavingGuest = false;
+  }
+}
+
+
+
 // ============================================================================
 // GIFT MANAGEMENT
 // ============================================================================
@@ -1001,81 +1112,105 @@ function editGiftFromGroup(guestGiftGroup) {
 /**
  * Open add gift modal
  */
-function openAddGiftModal() {
-    showAddGiftModal = true;
-    selectedGuestForGift = null;
-    guestSearchTerm = '';
-    showGuestSearchResults = false;
-    filteredGuestsForSearch = [];
-}
+// function openAddGiftModal() {
+//     showAddGiftModal = true;
+//     selectedGuestForGift = null;
+//     guestSearchTerm = '';
+//     showGuestSearchResults = false;
+//     filteredGuestsForSearch = [];
+// }
 
-/**
- * Close add gift modal
- */
-function closeAddGiftModal() {
-    showAddGiftModal = false;
-    newGift = { 
-        guest_id: '', 
-        gift_type: '', 
-        name: '', 
-        description: '', 
-        quantity: 1, 
-        value: null 
-    };
-    selectedGuestForGift = null;
-    guestSearchTerm = '';
-    showGuestSearchResults = false;
-    filteredGuestsForSearch = [];
-}
+// /**
+//  * Close add gift modal
+//  */
+// function closeAddGiftModal() {
+//     showAddGiftModal = false;
+//     newGift = { 
+//         guest_id: '', 
+//         gift_type: '', 
+//         name: '', 
+//         description: '', 
+//         quantity: 1, 
+//         value: null 
+//     };
+//     selectedGuestForGift = null;
+//     guestSearchTerm = '';
+//     showGuestSearchResults = false;
+//     filteredGuestsForSearch = [];
+// }
 
-// ============================================================================
-// GUEST SEARCH (FOR GIFTS)
-// ============================================================================
+// // ============================================================================
+// // GUEST SEARCH (FOR GIFTS)
+// // ============================================================================
 
-/**
- * Handle guest search for gift assignment
- */
-function handleGuestSearch() {
-    if (guestSearchTerm.length === 0) {
-        filteredGuestsForSearch = [];
-        showGuestSearchResults = false;
-        return;
-    }
+// /**
+//  * Handle guest search for gift assignment
+//  */
+// function handleGuestSearch() {
+//     if (guestSearchTerm.length === 0) {
+//         filteredGuestsForSearch = [];
+//         showGuestSearchResults = false;
+//         return;
+//     }
     
-    const searchLower = guestSearchTerm.toLowerCase();
-    filteredGuestsForSearch = guests.filter(guest => {
-        const name = (guest.full_name || '').toLowerCase();
-        const phone = (guest.phone || '').toLowerCase();
-        const email = (guest.email || '').toLowerCase();
+//     const searchLower = guestSearchTerm.toLowerCase();
+//     filteredGuestsForSearch = guests.filter(guest => {
+//         const name = (guest.full_name || '').toLowerCase();
+//         const phone = (guest.phone || '').toLowerCase();
+//         const email = (guest.email || '').toLowerCase();
         
-        return name.includes(searchLower) || 
-               phone.includes(searchLower) || 
-               email.includes(searchLower);
-    }).slice(0, 10);
+//         return name.includes(searchLower) || 
+//                phone.includes(searchLower) || 
+//                email.includes(searchLower);
+//     }).slice(0, 10);
     
-    showGuestSearchResults = true;
+//     showGuestSearchResults = true;
+// }
+
+// /**
+//  * Select a guest for gift assignment
+//  */
+// function selectGuestForGift(guest) {
+//     selectedGuestForGift = guest;
+//     newGift.guest_id = guest.guest_id;
+//     guestSearchTerm = '';
+//     showGuestSearchResults = false;
+//     filteredGuestsForSearch = [];
+// }
+
+// /**
+//  * Clear guest selection
+//  */
+// function clearGuestSelection() {
+//     selectedGuestForGift = null;
+//     newGift.guest_id = '';
+//     guestSearchTerm = '';
+//     showGuestSearchResults = false;
+//     filteredGuestsForSearch = [];
+// }
+
+function normalize(text = "") {
+  return text
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")               // split accents
+    .replace(/\p{Diacritic}+/gu, "") // drop accents
+    .replace(/[^\p{L}\p{N}@.+\s]/gu, " ") // keep letters/numbers/@/dot/plus; replace others with space
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-/**
- * Select a guest for gift assignment
- */
-function selectGuestForGift(guest) {
-    selectedGuestForGift = guest;
-    newGift.guest_id = guest.guest_id;
-    guestSearchTerm = '';
-    showGuestSearchResults = false;
-    filteredGuestsForSearch = [];
+// True if every token exists as a substring of the haystack (AND match)
+function tokensMatch(haystack, tokens) {
+  const base = normalize(haystack);
+  return tokens.every((t) => base.includes(t));
 }
 
-/**
- * Clear guest selection
- */
-function clearGuestSelection() {
-    selectedGuestForGift = null;
-    newGift.guest_id = '';
-    guestSearchTerm = '';
-    showGuestSearchResults = false;
-    filteredGuestsForSearch = [];
+// Build tokens from user query
+function queryTokens(q) {
+  return normalize(q)
+    .split(" ")
+    .filter(Boolean);
 }
 
 // ============================================================================
@@ -1540,118 +1675,66 @@ function getInviteStatusBadge(inviteSent) {
         : { text: 'Not Sent', class: 'badge-secondary' };
 }
 
+
+//Meal Counter
+
+// Normalize meal options (invites.meal_options may be jsonb[] or a stringified array)
+$: mealOptions = Array.isArray(clientData?.meal_options)
+  ? clientData.meal_options
+  : (() => { try { return JSON.parse(clientData?.meal_options || "[]"); } catch { return []; } })();
+
+// Count meals across all guest rows using your helper
+function countMeals(guestsArr, options = []) {
+  const counts = Object.fromEntries((options || []).map(o => [o, 0]));
+  for (const g of guestsArr) {
+    const meals = extractMeals(g.meal_preference); // <- you already have this
+    for (const m of meals) {
+      if (m in counts) counts[m] += 1;           // only count configured options
+    }
+  }
+  return counts;
+}
+
+$: mealCounts = countMeals(guests, mealOptions);
+
+
 // ============================================================================
 // LIFECYCLE
 // ============================================================================
 
-onMount(async () => {
-    clientSlug = $page.params.clientSlug;
+onMount(() => {
+  clientSlug = $page.params.clientSlug;
+
+  (async () => {
     await loadDashboardData();
-    
-    document.addEventListener('click', handleClickOutside);
-    document.addEventListener('click', handleClickOutsideGuestSearch);
-    
-    return () => {
-        document.removeEventListener('click', handleClickOutside);
-        document.removeEventListener('click', handleClickOutsideGuestSearch);
-    };
-});
+  })();
 
-  $: if (browser) {
-    const anyModalOpen =
-      showMessagePreviewModal ||
-      showAddGuestModal ||
-      showAddGiftModal ||
-      showEditGiftModal;
+  document.addEventListener('click', handleClickOutside);
+  document.addEventListener('click', handleClickOutsideGuestSearch);
 
-    document.documentElement.classList.toggle('no-scroll', anyModalOpen);
+  // return sync cleanup
+return () => {
+  document.removeEventListener('click', handleClickOutside);
+  document.removeEventListener('click', handleClickOutsideGuestSearch);
+
+  // Only reset if this component actually locked it
+  if (browser && document.body.style.overflow === 'hidden') {
+    document.body.style.overflow = '';
   }
-
-  // clean up on page destroy (important for navigation)
-  onDestroy(() => {
-    if (browser) {
-      document.documentElement.classList.remove('no-scroll');
-      document.body.style.overflow = ""; // extra safety
-    }
-  });
+}
+}); 
 
 
 </script>
 
 <svelte:head>
-     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"rel="stylesheet">
 </svelte:head>
 
-<style lang="postcss">
-  @reference "tailwindcss";
-@import 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap'
+<style lang="postcss"> 
+@reference "tailwindcss";
 
-:root {
-  /* Brand */
-  --brand: #111111;
-  --brand-ink: #000000;
-
-  /* Surfaces & backgrounds */
-  --bg: #FAFAF8;
-  --surface: #FFFFFF;
-  --surface-variant: #F6F6F4;
-
-  /* Borders & outlines */
-  --border-subtle: #ABABAB;
-  --border: #d4d4d4;
-
-  /* Text */
-  --text: #111111;
-  --text-weak: #444444;
-  --text-muted: #737373;
-
-  /* Accents / states */
-  --accent: #3b82f6;          /* info */
-  --accent-weak: #f0f9ff;
-  --warn: #f59e0b;
-  --danger: #ef4444;
-
-  /* Success & semantic badges */
-  --success-bg: #DAFFCD;
-  --success-fg: #046E11;
-  --warning-bg: #FFEFCD;
-  --warning-fg: #6E6004;
-  --danger-bg: #ef444420;
-  --danger-fg: #ef4444;
-  --info-bg: #3b82f620;
-  --info-fg: #3b82f6;
-  --secondary-bg: #FFCDCD;
-  --secondary-fg: #6E0404;
-
-  /* Typography */
-  --ff-sans: 'DM Sans', system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
-  --fs-display: clamp(28px, 2.6vw, 44px);
-  --fs-title: 20px;
-  --fs-body: 16px;
-  --fs-caption: 12px;
-  --lh-tight: 1.25;
-  --lh-body: 1.5;
-
-  /* Spacing (scale) */
-  --sp-2: 8px;
-  --sp-3: 12px;
-  --sp-4: 16px;
-  --sp-6: 24px;
-  --sp-8: 32px;
-  --sp-10: 40px;
-  --sp-12: 48px;
-
-  /* Radii */
-  --radius-sm: 8px;
-  --radius: 12px;
-  --radius-pill: 999px;
-  --radius-card: 20px;
-
-  /* Elevation (shadows) */
-  --elev-0: 0 0 0 rgba(0,0,0,0);
-  --elev-1: 0 1px 2px rgba(0,0,0,.06), 0 1px 1px rgba(0,0,0,.04);
-  --elev-2: 0 4px 12px rgba(0,0,0,.08);
-}
+@import url('https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Inter:wght@100..900&display=swap');
 
 
 /* ============================================================================
@@ -1666,23 +1749,19 @@ onMount(async () => {
 /* ============================================================================
    GLOBAL STYLES
    ============================================================================ */
-:global(html) {
-    -webkit-font-smoothing: antialiased; 
-    -moz-osx-font-smoothing: grayscale; 
-}
+
 
 :global(body) {
     margin: 0;
     padding: 0;
-    background: #FAFAF8;
 }
 
 /* ============================================================================
    LAYOUT
    ============================================================================ */
-.dashboard-container {
+.dashboard-container {@apply min-h-screen;
     display: flex;
-    min-height: 100vh;
+ 
    
 }
 
@@ -1691,38 +1770,22 @@ onMount(async () => {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: #FAFAF8;
+    
+}
+
+.dashboard-content {@apply min-h-screen px-8 py-6;
+
    
 }
 
-.dashboard-content {
-    padding: 4rem 6rem;
-    border-bottom:1px solid #ababab;
-}
-
-/* .breadcrumb {
-  
-    padding: 16px 24px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    border-bottom:0.75px solid #ABABAB
-}
-
-.breadcrumb-path {
-    font-size: 14px;
-    color: #737373;
-} */
 
 /*Empty Dashboard State*/
 
-.empty-dashboard {
+.empty-dashboard {@apply my-28 lg:my-32;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 70vh; 
   text-align: center;
-  border-bottom: 0.75px solid #ABABAB; 
 }
 
 .empty-content {
@@ -1730,7 +1793,7 @@ onMount(async () => {
 }
 
 .empty-title {
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 2.75em; 
     line-height: 1.25em;
     font-weight: 400;
@@ -1746,90 +1809,34 @@ onMount(async () => {
 }
 
 
-.uploadguest-btn{
-    margin-top:2rem;
-     padding: 24px 48px;
-  border-radius: 50px;
-  border: 1px solid black;
-  display: inline-flex; 
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 300ms ease-in 100ms;
-}
-
-.uploadguest-icon {
-    fill: #000;
-  transition: fill 300ms ease-in 100ms;
-}
-
-.uploadguest-label{
-    font-family:'DM Sans',sans-serif;
-   margin-left:1rem;
-   font-weight:500;
-   font-size:1.5em;
-    color:#000;
-      transition: color 300ms ease-in 100ms;
-}
-
-.uploadguest-btn:hover {
-  transform:scale(1.02);
-}
-
-
-
 /* ============================================================================
    SIDEBAR
    ============================================================================ */
 .sidebar {
-    width: 15vw;
-    background: #FAFAF8;
-    border-right: 0.75px solid #ABABAB;
-    display: flex;
-    flex-direction: column;
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    transition: width 300ms ease-in 100ms;
+  position: sticky;
+  top: 0;
+  height: 100vh;        /* use dynamic vh to avoid iOS/Chrome UI jumps */
+  overflow-y:auto;        /* sidebar owns its scroll */
+  width: 15vw;
+  display: flex;
+  flex-direction: column;
+  border-right: 0.75px solid #ABABAB;
 }
 
-.sidebar.collapsed {
-    width: 6vw;
-}
-
-.sidebar-header {
-    padding:1rem;
+.sidebar-header {@apply p-4 lg:p-6;
+    
     display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top:2rem;
+    align-items: left;
     
 }
 
-.sidebar-toggle {
-    padding: 14px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-}
 
-.sidebar-toggle:hover {
-    background: #e8e8e8;
-    border-radius: 4px;
-    color: #000;
-    transition: background-color 300ms ease-in 100ms;
-}
 
 .client-info {
     overflow: hidden;
     transition: opacity 300ms ease-in;
 }
 
-.sidebar.collapsed .client-info {
-    opacity: 0;
-    width: 0px;
-}
 
 .client-name {
     font-size: 18px;
@@ -1837,59 +1844,36 @@ onMount(async () => {
     color: #000;
 }
 
-.sidebar.collapsed .client-name {
-    width: 0;
-    opacity: 0;
-    transition: opacity 600ms ease-in;
-}
 
 /* Navigation */
-.nav-menu {
+.nav-menu {@apply mt-6;
     flex: 1;
-    padding: 2rem 0;
+
 }
 
-.nav-item {
+.nav-item {@apply px-6 py-3;
     display: flex;
     align-items: center;
-    padding: 2rem;
-    margin: 10px;
     color: #000000;
-    text-decoration: none;
-    transition: all 300ms ease-in 100ms;
     cursor: pointer;
     position: relative;
-    font-family:'DM Sans',sans-serif;
-
+    font-family:'Inter',sans-serif;
+    opacity:0.6
 }
 
 .nav-item:hover {
-    background: #e5e6f6;
-    padding: 1.5rem 2rem;
-    border-radius: 10px;
-    margin: 10px;
+    text-decoration:underline;
     color: #000;
+    opacity:0.8
 }
 
-.nav-item.active {
-   
-    background: #D9DBF9;
-    margin: 10px;
-    border-radius: 10px;
+.nav-item.active {@apply text-base font-bold;
+    font-family:'Inter',sans-serif;
     color: #000;
-    font-weight: 600;
+    text-decoration:underline;
+    opacity:1;
 }
 
-.sidebar.collapsed .nav-item {
-    justify-content: center;
-    padding: 12px;
-    border-radius: 8px;
-}
-
-.sidebar.collapsed .nav-item:hover {
-    background-color: #e8e8e8;
-    border-radius: 8px;
-}
 
 .nav-icon {
     width: 30px;
@@ -1898,25 +1882,15 @@ onMount(async () => {
     flex-shrink: 0;
 }
 
-.sidebar.collapsed .nav-icon {
-    margin-right: 0px;
-}
 
-.nav-label {
-    font-family:'DM Sans',sans-serif;
-    font-size:1.25em;
-    font-weight:500;
-    letter-spacing:0.005em;
+.nav-label {@apply text-xs;
+    font-family:'Inter',sans-serif;
+    font-weight:400;
     white-space: nowrap;
     overflow: hidden;
     transition: opacity 300ms ease-in;
-    margin-left:2rem;
 }
 
-.sidebar.collapsed .nav-label {
-    opacity: 0;
-    width: 0;
-}
 
 .nav-footer {
     padding-top: 10px;
@@ -1930,9 +1904,6 @@ onMount(async () => {
     transition: all 300ms ease-in 100ms;
 }
 
-.sidebar.collapsed .client-profile {
-    margin: 16px;
-}
 
 .client-avatar {
     width: 40px;
@@ -1966,64 +1937,46 @@ onMount(async () => {
     overflow: hidden;
 }
 
-.sidebar.collapsed .client-sub {
-    width: 0;
-    opacity: 0;
-    transition: opacity 600ms ease-in;
-}
 
 /* ============================================================================
    SECTIONS & HEADERS
    ============================================================================ */
-.metrics-section {
-    margin-bottom: 32px;
-    /* border-bottom:0.75px solid #ABABAB */
-    
-}
+.metrics-section {@apply mb-8 lg:mb-8;
 
-.header-buttons {
-    display: flex;
-    gap: 12px; /* Controls spacing between the buttons */
-    align-items: center;
+    
 }
 
 .section-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 30px;
+    align-items: center;
+
 }
 
-.section-title {
-    font-family: 'DM Sans', sans-serif;
-    font-size:var(--fs-title);
-    font-weight: 500;
-    color: #111;
-    /* margin: 2rem 0 0 0; */
+.section-title { @apply text-xs lg:text-sm font-medium; 
+    font-family: 'Inter', sans-serif;
+    color: black;
 }
 
-.section-description {
-    font-family: 'DM Sans', sans-serif;
-    font-size:var(--fs-body);
-    font-weight: 300;
-    letter-spacing:0.001em;
-    color: #444;
+.section-description { @apply text-xs lg:text-xs text-zinc-500;
+    font-family: 'Inter', sans-serif;
     opacity: 0.8;
 }
 
-.uploadguests-btn{
+
+/* .uploadguests-btn{
        padding:24px 48px;
     border-radius: 999px;
    border:1px solid #ababab;
-   font-family:'DM Sans', sans-serif;
+   font-family:'Inter', sans-serif;
    font-size:1.5em;
-    /* background: #D9D9D9; */
+
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 300ms ease-in 100ms;
-}
+} */
 
 .uploadguests-icon{
     margin-right:1rem;
@@ -2044,44 +1997,30 @@ onMount(async () => {
     gap: 20px;
 }
 
-.metric-card {
-    background: linear-gradient(220deg, #cdd1ff 0%, #c6cbff 100%);
-    border-radius: 20px;
-    padding: 2rem;
-    border: none;
+.metric-card {@apply max-w-sm pt-3 px-4 pb-4 bg-white border border-gray-300 ;
+    /* background: linear-gradient(2200deg, #ABB1EF 0%, #E9EBFF 100%);*/
     text-align:left;
-    transition: all 0.2s ease-in-out;
 }
 
-/* .metric-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-} */
 
-.metric-label {
-    font-family:'DM Sans',sans-serif;
-    font-size: 1.875em;
-    font-weight:500;
-    letter-spacing:0.015em;
+
+.metric-label { @apply text-sm mb-2 lg:text-base; 
+    font-family:'Inter',sans-serif;
     color: #000;
-    opacity:70%;
-    
+    opacity:80%;
     display:flex;
     align-items:flex-start;
 }
 
-.metric-value {
-    font-size: 5.5em; /* smaller, closer to screenshot */
-    font-weight: 600;
+.metric-value {@apply text-2xl lg:text-4xl font-bold;
     color: #000;
-   
 }
 
-/* .metric-subtitle {
+.metric-subtitle {
     font-size: 12px;
     color: #a3a3a3;
     margin-top: 8px;
-} */
+}
 
 .metrics-toggle-btn {
     width: auto;
@@ -2103,23 +2042,7 @@ onMount(async () => {
     background: #f5f5f5;
     transform: scale(1.03);
 }
-.settings-btn {
-    width: 4rem;
-    height: 4rem;
-    border-radius: 12px;
-   border:0.75px solid #ababab;
-    /* background: #D9D9D9; */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 300ms ease-in 100ms;
-}
 
-.settings-btn:hover {
-    background: #eee4e4;
-    transform: scale(1.03);
-}
 
 .metric-setting-row {
     display: flex;
@@ -2157,17 +2080,16 @@ onMount(async () => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom:0;
+    margin-bottom: 0;
 }
 
 
 
-.table-container {
-    
-    border-radius: 10px;
-    padding: 3rem;
-    margin-bottom: 24px;
-    border: 0.75px solid #ABABAB;
+.table-container {@apply mb-8 relative overflow-x-auto sm:rounded-lg;
+    border-radius: 6px;
+    padding: 2rem;
+  
+    border: 1px solid #d6d6d6;
 }
 
 .table-actions {
@@ -2176,66 +2098,37 @@ onMount(async () => {
     align-items: center;
 }
 
-.data-table {
-    width: 100%;
+.data-table {@apply w-full ;
     border-collapse: collapse;
-    margin-top: 16px;
 }
 
-.data-table th {
-    text-align: left;
-    padding: 12px;
-    border-bottom: 0.5px solid #bcbcbc;
-    font-family:'DM Sans',sans-serif;
-    font-weight: 300;
-    color: #525252;
-    font-size: 1.25em;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+.data-table th {@apply uppercase font-medium text-left text-gray-900 bg-white;
+    border-bottom: 0.5px solid #d4d4d4;
+    font-family:'Inter',sans-serif;
+    font-size:0.65em;
 }
 
 .data-table td {
-    padding: 16px 12px;
+    /* padding: 16px 12px; */
     border-bottom: 0.25px solid #e5e5e5;
     color: #262626;
-    font-size: 1em;
+     font-size:0.65em;
+}
+
+.data-table th,
+.data-table td {
+  vertical-align: middle; /* or top, but be consistent */
+  line-height: 1.2;
 }
 
 .data-table tr:hover td {
-    background: #E8E8E8;
+    background: #fafafa;
 }
 
-.data-table tr.clickable-row {
-    cursor: pointer;
-    transition: background-color 200ms ease-in-out;
-    position: relative;
-}
-
-.data-table tr.clickable-row:hover td {
-    background: #f1f1f1;
-}
-
-.data-table tr.clickable-row:active td {
-   background: #f1f1f1;
-}
-
-.name-cell {
-    font-family:'DM Sans',sans-serif;
-    font-weight:400;
-    font-size:1.25em;
-    cursor: pointer;
-    transition: color 200ms ease-in-out;
-}
-
-
-.name-cell:hover {
-    color: #0369a1;
-}
-
-.phone-cell {
-    font-family:'DM Sans',sans-serif;
-    font-weight:400;
-    font-size:1.25em;
+.name-cell {@apply text-xs;
+    font-family:'Inter',sans-serif;
+    font-weight:300;
+  
     cursor: pointer;
     transition: color 200ms ease-in-out;
 }
@@ -2243,29 +2136,26 @@ onMount(async () => {
 /* ============================================================================
    ACTION BUTTONS
    ============================================================================ */
-.action-btn-db {
-    height: 2rem;
-    padding: 1.375rem 1.375rem;
-    border-radius: 50px;
-    background: black;
+
+
+
+
+.action-btn-db {@apply text-xs font-semibold py-4 px-2;
+    font-family: 'Inter', sans-serif;
     display: flex;
     align-items: center;
     cursor: pointer;
-    transition: background-color 300ms ease-in, transform 300ms ease-in;
-    position: relative;
-    overflow: hidden;
+    color:#3b82f6;
 }
 
-.action-label-db {
-    color: white;
-    font-size: 1.25em;
-    
+.action-btn-db:hover {@apply underline;
 }
 
-.action-btn {
+
+
+.action-btn {@apply pr-4;
     height: 36px;
-     padding: 1.375rem 1.375rem;
-    border-radius: 12px;
+    border-radius: 6px;
     background: white;
     display: flex;
     align-items: center;
@@ -2273,13 +2163,10 @@ onMount(async () => {
     transition: background-color 300ms ease-in, transform 300ms ease-in;
     position: relative;
     overflow: hidden;
-    border: 0.5px solid #d4d4d4;
+ 
 }
 
-.action-btn:hover {
-    background: #f5f5f5;
-    border: 0.5px solid #d4d4d4;
-}
+
 
 .action-btn.primary {
     background: #000;
@@ -2306,7 +2193,7 @@ onMount(async () => {
 }
 
 .action-label-delete {
-    font-size: 1em;
+    font-size: 14px;
     white-space: nowrap;
     max-width: 0;
     overflow: hidden;
@@ -2320,13 +2207,12 @@ onMount(async () => {
 }
 
 .action-icon {
-    width: 1.5rem;
-    height:  1.5rem;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
 }
 
-.action-label {
-    font-size: 1em;
+.action-label {@apply text-xs;
     font-weight: 500;
     white-space: nowrap;
     max-width: 0;
@@ -2340,53 +2226,26 @@ onMount(async () => {
     transition: 200ms ease-in;
 }
 
-.viewdetails-btn{
-   padding: 0.675rem 1.675rem;
-    border-radius:999px;
-    background: #D9DCFA; 
-    color: black; 
-    border: none;
-    font-family:'DM Sans', sans-serif;
-    font-size: 1em;
-    font-weight: 900;
-    letter-spacing:0.03em;
-      display: flex;
-    align-items: center;
-    cursor: pointer;
-    transition: all 300ms ease-in;
-   text-transform:uppercase;
-}
-
-.viewdetails-icon{
-    margin-right:1rem;
-}
-
 .whatsapp-btn{
-  
-   padding: 0.675rem 1.675rem;
-    border-radius:999px;
-    background: #D9DCFA; 
-    color: black; 
+    padding: 0.75rem 1.25rem;
+    border-radius:6px;
+    background: #00782e; 
+    color: white; 
     border: none;
-    font-family:'DM Sans', sans-serif;
-    font-size: 1em;
-    font-weight: 900;
-    letter-spacing:0.03em;
-     text-transform:uppercase;
+    font-size: 0.75em;
+    font-weight: 600;
+    letter-spacing: 0.03em;
       display: flex;
     align-items: center;
     cursor: pointer;
     transition: all 300ms ease-in;
-
-  
+    position: relative;
  
 }
 
 .whatsapp-btn-label{
-   margin-left:1rem;
+   margin-left:10px;
 }
-
-
 
 .whatsapp-btn:hover{
     transform:scale(1.02);
@@ -2407,20 +2266,19 @@ onMount(async () => {
    ============================================================================ */
 .search-container {
     position: relative;
-    width: 32rem;
-    margin: 32px 0;
+    width: 400px;
+    flex-shrink:0
 }
 
-.search-input {
+.search-input {@apply text-xs;
     width: 100%;
     display:flex;
-    align-items:flex-end;
-    height: 4rem;
-    padding: 0 2rem 0 1rem;
+   
+    height:36px;
+    padding: 0 40px 0 12px;
     border: 0.5px solid #d4d4d4;
     border-radius: 12px;
-    font-size: 1.375em;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     transition: all 300ms ease-in 100ms;
 }
 
@@ -2434,7 +2292,7 @@ onMount(async () => {
 
 .search-icon {
     position: absolute;
-    right: 1.5rem;
+    right: 12px;
     top: 50%;
     transform: translateY(-50%);
     width: 18px;
@@ -2447,13 +2305,13 @@ onMount(async () => {
     position: relative;
 }
 
-.guest-search-input {
-    width: 100%;
+.guest-search-input {@apply max-w-full;
+   
     padding: 12px;
     border: 0.5px solid #d4d4d4;
     border-radius: 12px;
     font-size: 14px;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     transition: all 300ms ease-in 100ms;
 }
 
@@ -2568,24 +2426,21 @@ onMount(async () => {
 /* ============================================================================
    BADGES
    ============================================================================ */
-.badge {
+.badge {@apply font-bold px-3 py-2 uppercase;
     display: inline-block;
-    padding: 0.675rem 1.675rem;
-    border-radius: 999px;
-    font-family:'DM Sans',sans-serif;
-    font-size: 1em;
-    font-weight: 600;
-    letter-spacing: 0.03em;
+    border-radius: 4px;
+    font-size:0.75em;
+
 }
 
 .badge-success {
-    background: #DAFFCD;
-    color: #046E11;
+    background: #10b98120;
+    color: #10b981;
 }
 
 .badge-warning {
-    color: #6E6004;
-    background: #FFEFCD;
+    background: #f59e0b20;
+    color: #f19b07;
 }
 
 .badge-danger {
@@ -2599,9 +2454,16 @@ onMount(async () => {
 }
 
 .badge-secondary {
-    background: #FFCDCD;
-    color: #6E0404;
-    font-weight: 800;
+    background: #fa916e;
+    color: #4E2517;
+}
+
+.badge-meal {
+  background: #e5e7ff;   /* soft indigo-ish */
+  color: #1e1b4b;        /* deep indigo text */
+  margin-right: 4px;
+  margin-bottom: 4px;
+  display: inline-block;
 }
 
 /* ============================================================================
@@ -2624,7 +2486,7 @@ onMount(async () => {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     border-bottom: #000 2px;
 }
 
@@ -2751,22 +2613,18 @@ onMount(async () => {
     align-items: center;
     margin-top: 20px;
     gap: 8px;
-    font-size:1em;
 }
 
-.page-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #d4d4d4;
-    cursor: pointer;
-    transition: all 300ms ease-in 100ms;
+.pagination-label{
+    font-family: 'Inter', sans-serif;
+    font-size:0.75em;
+    text-transform:uppercase;
+    opacity:0.6;
 }
 
-.page-dot.active {
-    background: #000;
-    transform: scale(1.3);
-}
+
+
+
 
 /* ============================================================================
    MODALS
@@ -2785,7 +2643,7 @@ onMount(async () => {
 }
 
 .modal-content {
-    background: #FAFAF8;
+    background:white;
     border-radius: 12px;
     padding: 24px;
     max-width: 500px;
@@ -2857,7 +2715,7 @@ onMount(async () => {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2926,7 +2784,7 @@ onMount(async () => {
     text-align: left;
     cursor: pointer;
     transition: all 200ms ease-in;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 .variable-btn:hover {
@@ -2993,7 +2851,7 @@ onMount(async () => {
     display: flex;
     align-items: center;
     gap: 4px;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 .reset-btn:hover {
@@ -3006,7 +2864,7 @@ onMount(async () => {
     flex: 1;
     padding: 20px;
     border: none;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 14px;
     line-height: 1.6;
     resize: none;
@@ -3072,7 +2930,7 @@ onMount(async () => {
 }
 
 .recipient-label {
-     font-family:'DM Sans',sans-serif;
+     font-family:'Inter',sans-serif;
    
 }
 
@@ -3110,7 +2968,7 @@ onMount(async () => {
    width: 100%; 
    min-height: 280px;
     resize: vertical; 
-    font-family: 'DM Sans', sans-serif; 
+    font-family: 'Inter', sans-serif; 
     font-size: 1em; 
     line-height: 1.5; 
     padding: 16px; 
@@ -3151,7 +3009,7 @@ onMount(async () => {
     border: 0.5px solid #d4d4d4;
     border-radius: 12px;
     font-size: 1em;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     transition: all 300ms ease-in 100ms;
 }
 
@@ -3167,8 +3025,51 @@ onMount(async () => {
 }
 
 /* ============================================================================
-   BUTTONS
+   BUTTONS CSS
    ============================================================================ */
+
+
+.uploadguest-btn{@apply lg:px-4 lg:py-3;
+  border-radius: 4px;
+  border: 1px solid #696969;
+  display: inline-flex; 
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 300ms ease-in 100ms;
+}
+
+.uploadguest-label{@apply ml-3 text-xs lg:text-xs;
+    font-family:'Inter',sans-serif;
+    font-weight:500;
+    color:black;
+    opacity:0.8;
+    transition: color 300ms ease-in 100ms;
+}
+
+.uploadguest-btn:hover {
+  transform:scale(1.01);
+  background:#f0f0f0;
+}
+
+
+/* .settings-btn {@apply w-10 h-10 lg:w-12 lg:h-12; 
+ 
+    border-radius: 4px;
+   border:1px solid #696969;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 300ms ease-in 100ms;
+}
+
+.settings-btn:hover {
+  transform:scale(1.01);
+  background:#f0f0f0;
+} */
+
+
 .btn {
     flex: 1;
     padding: 12px 24px;
@@ -3178,7 +3079,7 @@ onMount(async () => {
     cursor: pointer;
     transition: all 300ms ease-in 100ms;
     border: none;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 .btn-primary {
@@ -3201,6 +3102,11 @@ onMount(async () => {
     background: #f5f5f5;
 }
 
+.btn-label {
+    @apply text-xs font-semibold tracking-[0.33px];
+    font-family:'Inter',sans-serif;
+}
+
 /* Custom utility classes */
 .mx-3 { margin-left: 0.75rem; margin-right: 0.75rem; }
 .my-3 { margin-top: 0.75rem; margin-bottom: 0.75rem; }
@@ -3212,67 +3118,6 @@ onMount(async () => {
 .\!bg-red-600 { background-color: rgb(220 38 38) !important; }
 .scale-80 { transform: scale(0.8); }
 
-/* ============================================================================
-   RESPONSIVE
-   ============================================================================ */
-@media (max-width: 1024px) {
-    .metrics-grid {
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    }
-    
-    .search-container {
-        width: 100%;
-    }
-}
-
-@media (max-width: 768px) {
-    .dashboard-container {
-        flex-direction: column;
-    }
-    
-    .sidebar {
-        width: 100%;
-        height: auto;
-        position: relative;
-    }
-    
-    .sidebar-header {
-        padding: 16px;
-    }
-    
-    .nav-menu {
-        display: flex;
-        overflow-x: auto;
-        padding: 12px;
-    }
-    
-    .nav-item {
-        padding: 8px 16px;
-        white-space: nowrap;
-    }
-    
-    .breadcrumb {
-        position: relative;
-    }
-    
-    .section-title {
-        font-size: 28px;
-        line-height: 36px;
-    }
-    
-    .table-actions {
-        flex-wrap: wrap;
-    }
-    
-    .data-table {
-        font-size: 12px;
-    }
-    
-    .data-table th,
-    .data-table td {
-        padding: 8px;
-    }
-}
 </style>
 
 {#if loading}
@@ -3293,110 +3138,62 @@ onMount(async () => {
 {:else}
     <div class="dashboard-container">
         <!-- Sidebar -->
-        <aside class="sidebar" class:collapsed={sidebarCollapsed}>
-            <div class="sidebar-header">
-                <div class="client-info">
-                    <div class="client-name"><img class="scale-80" src="/landingpage/withloveheader.svg"  alt=""></div>
-                </div>
-                <!-- <button class="sidebar-toggle" on:click={() => sidebarCollapsed = !sidebarCollapsed}>
-                    <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        {#if sidebarCollapsed}
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                        {:else}
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                        {/if}
-                    </svg>
-                </button> -->
-                
-            </div>
-            
+        <aside class="sidebar">
+
             <nav class="nav-menu">
-                <a href="/{clientSlug}/dashboard" class="nav-item active">
-                    <!-- <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                    </svg> -->
+                <a href="/{clientSlug}/dashboard" class="nav-item active" >
                     <span class="nav-label">Dashboard</span>
                 </a>
                 <a href="/{clientSlug}/dashboard/checkin" class="nav-item">
-                    <!-- <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
-                    </svg> -->
                     <span class="nav-label">Check-In Scan</span>
                 </a>
-                <a href="/{clientSlug}/dashboard/upload-guests" class="nav-item">
-                    <!-- <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                    </svg> -->
+                <a href="/{clientSlug}/dashboard/upload-guests" class="nav-item" >                  
                     <span class="nav-label">Upload Guest List</span>
                 </a>
-                   <button class="nav-item" on:click={openSettingsModal}>
-                        <!-- <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg> -->
+                  <button class="nav-item" on:click={openSettingsModal}>                     
                         <span class="nav-label">Edit Message Template</span>
                     </button>
-                <div class="nav-footer">
-                    <!-- <a href="#" class="nav-item">
-                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
-                        </svg>
-                        <span class="nav-label">Support</span>
-                    </a> -->
-                
-                    <!-- <div class="client-profile mx-6 my-6 ">
-                        <div class="client-avatar">
-                            {#if clientData?.client_name}
-                                {clientData.client_name.charAt(0).toUpperCase()}
-                            {:else}
-                                W
-                            {/if}
-                        </div>
-                        <div class="client-details">
-                            <div class="client-name">{clientData?.client_name || 'Wedding'}</div>
-                            <div class="client-sub">
-                                {#if clientData?.events?.event_date}
-                                    {new Date(clientData.events.event_date).toLocaleDateString('en-US', {
-                                        month: 'short', day: 'numeric', year: 'numeric'
-                                    })}
-                                {/if}
-                            </div>
-                        </div>
-                    </div> -->
-                </div>
             </nav>
         </aside>
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Breadcrumb -->
-            <!-- <div class="breadcrumb">
-                <div class="breadcrumb-path">{currentRoute}</div>
-            </div> -->
-
+     
             <!-- Dashboard Content -->
             <div class="dashboard-content">
                 <!-- Key Metrics -->
                 <section class="metrics-section">
-                    <div class="section-header">
+                    <div class="section-header mb-8">
                          <div class="section-text-block">
-                        <h1 class="section-title">Overview</h1>
-                        <h3 class="section-description">View and personalize your metrics here.</h3>
+                        <h1 class="section-title">Dashboard</h1>
+                        <h3 class="section-description">See your wedding metrics, send and manage your invites here</h3>
             
                      
                     </div>
-                     <div class="header-buttons">
-                     <button
-                on:click={handleUploadGuests}
-                class="uploadguests-btn"
-              ><svg fill="currentColor" width="28px" height="28px" viewBox="0 0 24 24" id="upload" data-name="Flat Line" xmlns="http://www.w3.org/2000/svg" class="uploadguests-icon"><line id="primary" x1="12" y1="16" x2="12" y2="3" style="fill: none; stroke: rgb(0, 0, 0); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></line><polyline id="primary-2" data-name="primary" points="16 7 12 3 8 7" style="fill: none; stroke: rgb(0, 0, 0); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></polyline><path id="primary-3" data-name="primary" d="M20,16v4a1.08,1.08,0,0,1-1.14,1H5.14A1.08,1.08,0,0,1,4,20V16" style="fill: none; stroke: rgb(0, 0, 0); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path></svg>Import Guests </button>
-                       <button class="settings-btn" on:click={() => showMetricsSettings = !showMetricsSettings}>
-                            <svg width="28px" height="28px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                    <div class="flex row gap-2 lg:gap-4">
+                     <button class="uploadguest-btn" on:click={handleUploadGuests}>
+                        <svg fill="currentColor" width="16px" height="16px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8.71,7.71,11,5.41V15a1,1,0,0,0,2,0V5.41l2.29,2.3a1,1,0,0,0,1.42,0,1,1,0,0,0,0-1.42l-4-4a1,1,0,0,0-.33-.21,1,1,0,0,0-.76,0,1,1,0,0,0-.33.21l-4,4A1,1,0,1,0,8.71,7.71ZM21,12a1,1,0,0,0-1,1v6a1,1,0,0,1-1,1H5a1,1,0,0,1-1-1V13a1,1,0,0,0-2,0v6a3,3,0,0,0,3,3H19a3,3,0,0,0,3-3V13A1,1,0,0,0,21,12Z"/></svg>
+                        <span class="uploadguest-label">Import Guests</span>
+                    </button>
+                    <button class="uploadguest-btn" on:click={() => showMetricsSettings = !showMetricsSettings}>
+                      <svg 
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16px"
+                            height="16px"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#000000"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            >
+                            <line x1="18" y1="2" x2="22" y2="6" />
+                            <path d="M7.5 20.5L19 9l-4-4L3.5 16.5 2 22z" />
+
+                                 <span class="uploadguest-label">Edit Metrics</span>
                             </svg>
-                        </button>
-                         
-                    </div>
+                     </button>
+                    </div>     
                     </div>
                     <div class="metrics-grid">
                         {#each Object.keys(selectedMetrics) as metricKey}
@@ -3413,17 +3210,34 @@ onMount(async () => {
                         {/each}
                     </div>
                 </section>
-</div>
-<div class="dashboard-content">        
+            {#if clientData?.meal_options_enabled}
+                <section class="metrics-section">
+                <div class="section-header mb-4">
+                    <div class="section-text-block">
+                    <h2 class="section-title">Total Dish Count</h2>
+                    <p class="section-description">RSVP counts by dish</p>
+                    </div>
+                </div>
+
+                <div class="metrics-grid">
+                    {#each mealOptions as dish}
+                    <div class="metric-card">
+                        <div class="metric-label">{dish}</div>
+                        <div class="metric-value">{mealCounts[dish] ?? 0}</div>
+                    </div>
+                    {/each}
+                </div>
+                </section>
+{/if}
+             
             
 
 <!--Empty dashboard state-->
-<!-- {#if guestsNotSent.length === 0 && guestsSent.length === 0} -->
- {#if guests.length === 0}
+{#if guestsNotSent.length === 0 && guestsSent.length === 0}
   <section class="empty-dashboard">
   <div class="empty-content">
-    <p class="empty-title">Your dashboard is currently empty.</p>
-    <p class="empty-title">Let’s get the party started by importing your guests.</p>
+    <p class="section-title">Your dashboard is currently empty.</p>
+    <p class="section-description">Let’s get started by importing your guests.</p>
     <div class="empty-actions">
       <button class="uploadguest-btn" on:click={handleUploadGuests}>
         <svg fill="currentColor" width="20px" height="20px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8.71,7.71,11,5.41V15a1,1,0,0,0,2,0V5.41l2.29,2.3a1,1,0,0,0,1.42,0,1,1,0,0,0,0-1.42l-4-4a1,1,0,0,0-.33-.21,1,1,0,0,0-.76,0,1,1,0,0,0-.33.21l-4,4A1,1,0,1,0,8.71,7.71ZM21,12a1,1,0,0,0-1,1v6a1,1,0,0,1-1,1H5a1,1,0,0,1-1-1V13a1,1,0,0,0-2,0v6a3,3,0,0,0,3,3H19a3,3,0,0,0,3-3V13A1,1,0,0,0,21,12Z"/></svg>
@@ -3434,336 +3248,481 @@ onMount(async () => {
 </section>
 {/if}
 
- {#if guests.length > 0 && (guestsNotSent.length > 0 || guestsSent.length === 0)}
-<!-- Invites Sent Table -->
-<section class="table-container">
-    <div class="mb-10">
-        <h2 class="section-title">Invites Sent</h2>
-        <h4 class="section-description">You currently have <span class="text-[#FF0032] medium ">{metrics.rsvpNotConfirmed} pending RSVP's.</span></h4>
-    </div>
-    <div class="section-header">
-        <div class="search-container">
-            <input type="text" class="search-input" placeholder="Search guests by name or phone number..." bind:value={searchTermSent}>
-            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-        </div>
-
-        <div class="table-actions" on:click={handleClickOutside}>
-            <!-- Sort Dropdown -->
-            <div class="dropdown-container sort-dropdown">
-                <button 
-                    class="action-btn" 
-                    on:click|stopPropagation={toggleSortMenu}
-                    on:mouseenter={() => hoveredAction = 'sort'} 
-                    on:mouseleave={() => hoveredAction = null}>
-                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
-                    </svg>
-                    <span class="action-label" class:expanded={hoveredAction === 'sort' || expandedAction === 'sort'}>Sort</span>
-                    <svg class="dropdown-arrow" class:rotated={showSortMenu} fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; margin-left: 4px;">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
-
-                {#if showSortMenu}
-                    <div class="dropdown-menu" on:click|stopPropagation>
-                        <button class="dropdown-item" class:active={sortField === 'full_name'} on:click={() => setSortField('full_name')}>
-                            Name {sortField === 'full_name' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                        </button>
-                        <button class="dropdown-item" class:active={sortField === 'phone'} on:click={() => setSortField('phone')}>
-                            Phone {sortField === 'phone' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                        </button>
-                        <button class="dropdown-item" class:active={sortField === 'rsvp_status'} on:click={() => setSortField('rsvp_status')}>
-                            RSVP Status {sortField === 'rsvp_status' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                        </button>
-                        <button class="dropdown-item" class:active={sortField === 'checked_in'} on:click={() => setSortField('checked_in')}>
-                            Check-in {sortField === 'checked_in' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                        </button>
-                    </div>
-                {/if}
-            </div>
-
-            <!-- Filter Dropdown -->
-            <div class="dropdown-container filter-dropdown">
-                <button 
-                    class="action-btn" 
-                    on:click|stopPropagation={toggleFilterMenu}
-                    on:mouseenter={() => hoveredAction = 'filter'} 
-                    on:mouseleave={() => hoveredAction = null}>
-                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                    </svg>
-                    <span class="action-label" class:expanded={hoveredAction === 'filter' || expandedAction === 'filter'}>Filter</span>
-                    <svg class="dropdown-arrow" class:rotated={showFilterMenu} fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; margin-left: 4px;">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
-
-                {#if showFilterMenu}
-                    <div class="dropdown-menu filter-menu" on:click|stopPropagation>
-                        <div class="filter-section">
-                            <label class="filter-label">RSVP Status:</label>
-                            <select bind:value={filterRsvp} class="filter-select">
-                                <option value="all">All</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="declined">Declined</option>
-                                <option value="pending">Pending</option>
-                            </select>
+{#if emptySentData === false}
+                 <!-- Invites Sent Table -->
+                <section class="table-container">
+                    
+                    <h2 class="section-title">Invites Sent</h2>
+                    <h4 class="section-description mb-8">Track RSVP & Check-in status on invites you've sent.</h4>
+                    <div class="section-header mb-8">
+                        <div class="search-container">
+                            <input type="text" class="search-input" placeholder="Search guests..." bind:value={searchTermSent}>
+                            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
                         </div>
-
-                        <div class="filter-section">
-                            <label class="filter-label">Check-in Status:</label>
-                            <select bind:value={filterCheckIn} class="filter-select">
-                                <option value="all">All</option>
-                                <option value="checked-in">Checked In</option>
-                                <option value="not-checked-in">Not Checked In</option>
-                            </select>
-                        </div>
-
-                        <div class="filter-actions">
-                            <button class="filter-reset-btn" on:click={resetFilters}>Reset</button>
-                        </div>
-                    </div>
-                {/if}
-            </div>
-
-            <button class="action-btn" on:click={refreshData} on:mouseenter={() => hoveredAction = 'refresh'} on:mouseleave={() => hoveredAction = null}>
-                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
-                <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
-            </button>
-
-            {#if selectedGuestsSent.size > 0}
-                <button class="action-btn" on:click={() => showMarkNotSentConfirmation = true} style="background: #f59e0b; color: white;" on:mouseenter={() => hoveredAction = 'markNotSent'} on:mouseleave={() => hoveredAction = null}>
-                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
-                    </svg>
-                    <span class="action-label" class:expanded={hoveredAction === 'markNotSent'}>Mark Not Sent ({selectedGuestsSent.size})</span>
-                </button>
-
-                <button class="action-btn-delete" on:click={() => showDeleteSentConfirmation = true} on:mouseenter={() => hoveredAction = 'delete'} on:mouseleave={() => hoveredAction = null}>
-                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                    </svg>
-                    <span class="action-label-delete font-semibold tracking-[0.33px] visible">Delete ({selectedGuestsSent.size})</span>
-                </button>
-            {/if}
-        </div>
-    </div>
-
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th style="width: 40px;">
-                    <input type="checkbox" 
-                        checked={selectedGuestsSent.size === guestsSent.length && guestsSent.length > 0}
-                        on:change={selectAllSentGuests}
-                        style="width:30px; height:30px;">
-                </th>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>RSVP Status</th>
-                <th>Check-in Status</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            {#if paginatedGuestsSent.length > 0}
-                {#each paginatedGuestsSent as guest}
-                    {@const rsvpStatus = getRsvpStatusBadge(guest.rsvp_status)}
-                    {@const checkInStatus = getCheckInStatusBadge(guest.checked_in)}
-                    <tr class="clickable-row" on:click={(e) => handleGuestRowClick(guest, e)}>
-                        <td>
-                            <input type="checkbox"
-                                checked={selectedGuestsSent.has(guest.guest_id)}
-                                on:change={() => toggleSentGuestSelection(guest.guest_id)}
-                                style="width:30px; height:30px">
-                        </td>
-                        <td>
-                            <div class="name-cell">
-                                {guest.full_name || 'N/A'}
-                            </div>
-                            {#if guest.email}
-                                <div style="font-size: 12px; color: #737373;">{guest.email}</div>
-                            {/if}
-                        </td>
-                        <td> <div class="phone-cell">{guest.phone || '-'}</div></td>
-                        <td><span class="badge {rsvpStatus.class}">{rsvpStatus.text}</span></td>
-                        <td><span class="badge {checkInStatus.class}">{checkInStatus.text}</span></td>
-                        <td>
-                            <button 
-                                class="viewdetails-btn" 
-                                on:click|stopPropagation={() => goto(`/${clientSlug}/dashboard/details/${guest.guest_id}`)}
-                                title="See Guest Details">
-                                <svg fill="currentColor" width="1rem" height="1rem" class="viewdetails-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3.293,20.707a1,1,0,0,1,0-1.414L17.586,5H12a1,1,0,0,1,0-2h8a1,1,0,0,1,1,1v8a1,1,0,0,1-2,0V6.414L4.707,20.707a1,1,0,0,1-1.414,0Z"/></svg>
-                                <span class="viewdetails-btn-label">Open Details</span>
-                            </button>
-                        </td>
-                    </tr>
-                {/each}
-            {:else}
-                <tr>
-                    <td colspan="6" style="text-align: center; padding: 48px; color: #737373;">
-                        {searchTermSent ? 'No guests found matching your search.' : 'No invites have been sent yet.'}
-                    </td>
-                </tr>
-            {/if}
-        </tbody>
-    </table>
-
-    <div class="pagination">
-        <button on:click={() => goToSentGuestPage(guestPageSent - 1)} disabled={guestPageSent === 1}>Prev</button>
-        {#each Array(totalSentPages) as _, index}
-            <button 
-                class:active={guestPageSent === index + 1}
-                on:click={() => goToSentGuestPage(index + 1)}>
-                {index + 1}
-            </button>
-        {/each}
-        <button on:click={() => goToSentGuestPage(guestPageSent + 1)} disabled={guestPageSent === totalSentPages}>Next</button>
-    </div>
-</section>
-{/if}
-
-
- <!-- Invites Not Sent Table -->
-<!-- {#if guestsNotSent.length > 0} -->
- {#if guests.length > 0 && (guestsNotSent.length > 0 || guestsSent.length === 0)}
-<section class="table-container">
-    <div class="mb-10">
-        <h2 class="section-title">Invites Not Sent</h2>
-        <h3 class="section-description">
-            You currently have 
-            <span class="text-[#FF0032] medium">{metrics.invitesNotSent} unsent invites.</span>
-        </h3>
-    </div>
-
-    <div class="section-header table">
-        <div class="search-container">
-            <input 
-                type="text" 
-                class="search-input" 
-                placeholder="Search guests by name or phone.." 
-                bind:value={searchTermNotSent}>
-            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-        </div>
-
-        <div class="table-actions" on:click={handleClickOutside}>
-            <button class="action-btn" on:click={refreshData}
-                    on:mouseenter={() => hoveredAction = 'refresh'}
-                    on:mouseleave={() => hoveredAction = null}>
-                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
-                <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
-            </button>
-
-            {#if selectedGuestsNotSent.size > 0}
-            <button class="action-btn-delete" on:click={() => showDeleteConfirmation = true}>
-                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
-                <span class="action-label-delete visible">
-                    Delete ({selectedGuestsNotSent.size})
-                </span>
-            </button>
-            {/if}
-
-            <button class="action-btn-db ml-2" on:click={() => showAddGuestModal = true}>
-                <span class="action-label-db">Add a Guest</span>
-            </button>
-        </div>
-    </div>
-
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th style="width: 40px;">
-                    <input type="checkbox" 
-                           checked={selectedGuestsNotSent.size === guestsNotSent.length && guestsNotSent.length > 0}
-                           on:change={selectAllNotSentGuests}
-                           style="width:30px; height:30px;">
-                </th>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Invite Sent</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            {#if paginatedGuestsNotSent.length > 0}
-                {#each paginatedGuestsNotSent as guest}
-                    <tr>
-                        <td>
-                            <input type="checkbox"
-                                   checked={selectedGuestsNotSent.has(guest.guest_id)}
-                                   on:change={() => toggleNotSentGuestSelection(guest.guest_id)}
-                                   style="width:30px; height:30px;">
-                        </td>
-                        <td>
-                            <div class="name-cell">{guest.full_name || 'N/A'}</div>
-                            {#if guest.email}
-                                <div style="font-size: 12px; color: #737373;">{guest.email}</div>
-                            {/if}
-                        </td>
-                        <td><div class="phone-cell">{guest.phone || '-'}</div></td>
-                        <td><span class="badge badge-secondary">Not Sent</span></td>
-                        <td>
-                            {#if guest.phone}
-                                <button class="whatsapp-btn" 
-                                        on:click|stopPropagation={() => sendWhatsAppInvite(guest)}>
-                                    <svg width="1rem" height="1rem" class="whatsapp-icon" viewBox="0 0 24 24">
-                                        <path d="M17.472 14.382..."/>
+                        
+                        <div class="table-actions" on:click={handleClickOutside}>
+                            <!-- Sort Dropdown -->
+                            <div class="dropdown-container sort-dropdown">
+                                <button 
+                                    class="action-btn" 
+                                    on:click|stopPropagation={toggleSortMenu}
+                                    on:mouseenter={() => hoveredAction = 'sort'} 
+                                    on:mouseleave={() => hoveredAction = null}>
+                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
                                     </svg>
-                                    <span class="whatsapp-btn-label">Send Invite</span>
+                                    <span class="action-label" class:expanded={hoveredAction === 'sort' || expandedAction === 'sort'}>Sort</span>
+                                    <svg class="dropdown-arrow" class:rotated={showSortMenu} fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; margin-left: 4px;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
                                 </button>
-                            {:else}
-                                <button class="action-btn no-phone-btn" disabled
-                                        style="background: #ef4444; color: white;">
-                                    <span style="font-size: 12px;">No Phone</span>
+                                
+                                {#if showSortMenu}
+                                    <div class="dropdown-menu" on:click|stopPropagation>
+                                        <button class="dropdown-item" class:active={sortField === 'full_name'} on:click={() => setSortField('full_name')}>
+                                            Name {sortField === 'full_name' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                                        </button>
+                                        <button class="dropdown-item" class:active={sortField === 'phone'} on:click={() => setSortField('phone')}>
+                                            Phone {sortField === 'phone' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                                        </button>
+                                        <button class="dropdown-item" class:active={sortField === 'rsvp_status'} on:click={() => setSortField('rsvp_status')}>
+                                            RSVP{sortField === 'rsvp_status' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                                        </button>
+                                        <button class="dropdown-item" class:active={sortField === 'checked_in'} on:click={() => setSortField('checked_in')}>
+                                            Check-in {sortField === 'checked_in' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                                        </button>
+                                    </div>
+                                {/if}
+                            </div>
+
+                            <!-- Filter Dropdown -->
+                            <div class="dropdown-container filter-dropdown">
+                                <button 
+                                    class="action-btn" 
+                                    on:click|stopPropagation={toggleFilterMenu}
+                                    on:mouseenter={() => hoveredAction = 'filter'} 
+                                    on:mouseleave={() => hoveredAction = null}>
+                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                                    </svg>
+                                    <span class="action-label" class:expanded={hoveredAction === 'filter' || expandedAction === 'filter'}>Filter</span>
+                                    <svg class="dropdown-arrow" class:rotated={showFilterMenu} fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; margin-left: 4px;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </button>
+                                
+                                {#if showFilterMenu}
+                                    <div class="dropdown-menu filter-menu" on:click|stopPropagation>
+                                        <div class="filter-section">
+                                            <label class="filter-label">RSVP Status:</label>
+                                            <select bind:value={filterRsvp} class="filter-select">
+                                                <option value="all">All</option>
+                                                <option value="confirmed">Confirmed</option>
+                                                <option value="declined">Declined</option>
+                                                <option value="pending">Pending</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="filter-section">
+                                            <label class="filter-label">Check-in Status:</label>
+                                            <select bind:value={filterCheckIn} class="filter-select">
+                                                <option value="all">All</option>
+                                                <option value="checked-in">Checked In</option>
+                                                <option value="not-checked-in">Not Checked In</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="filter-actions">
+                                            <button class="filter-reset-btn" on:click={resetFilters}>Reset</button>
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
+
+                            <button class="action-btn" on:click={refreshData} on:mouseenter={() => hoveredAction = 'refresh'} on:mouseleave={() => hoveredAction = null}>
+                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
+                            </button>
+
+                            {#if selectedGuestsSent.size > 0}
+                                <button class="action-btn-delete" on:click={() => showMarkNotSentConfirmation = true} style="background: #f59e0b; color: white;" on:mouseenter={() => hoveredAction = 'markNotSent'} on:mouseleave={() => hoveredAction = null}>
+                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                                    </svg>
+                                     <span class="action-label-delete font-semibold text-xs visible">Mark Not Sent ({selectedGuestsSent.size})</span>
+                                </button>
+
+                                <button class="action-btn-delete" on:click={() => showDeleteSentConfirmation = true} on:mouseenter={() => hoveredAction = 'delete'} on:mouseleave={() => hoveredAction = null}>
+                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                    <span class="action-label-delete font-semibold text-xs visible">Delete ({selectedGuestsSent.size})</span>
                                 </button>
                             {/if}
-                        </td>
-                    </tr>
-                {/each}
-            {:else}
-                <!-- Handles search returning nothing -->
-                <tr>
-                    <td colspan="5" style="text-align:center; padding:48px; color:#737373;">
-                        {searchTermNotSent 
-                          ? 'No guests found matching your search.' 
-                          : 'All guests have been sent invites!'}
-                    </td>
-                </tr>
-            {/if}
-        </tbody>
-    </table>
+                        </div>
+                    </div>
 
-    <div class="pagination">
-        <button on:click={() => goToNotSentGuestPage(guestPage - 1)} disabled={guestPage === 1}>
-            Prev
-        </button>
-        {#each Array(totalNotSentPages) as _, index}
-            <button class:active={guestPage === index + 1}
-                    on:click={() => goToNotSentGuestPage(index + 1)}>
-                {index + 1}
-            </button>
-        {/each}
-        <button on:click={() => goToNotSentGuestPage(guestPage + 1)} disabled={guestPage === totalNotSentPages}>
-            Next
-        </button>
-    </div>
-</section>
+                    <table class="data-table">
+                        <thead>
+                            <tr class="">
+                                <th style="width: 40px;">
+                                    <input type="checkbox" 
+                                        checked={selectedGuestsSent.size === guestsSent.length && guestsSent.length > 0}
+                                        on:change={selectAllSentGuests}
+                                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded-sm focus:ring-blue-500 ">
+                                </th>
+                                 <th scope="col" class="py-2">Name</th>
+                                  <th scope="col">Phone</th>
+                                  <th scope="col">RSVP</th>
+                                  <th scope="col">Guests</th>
+                                  <th scope="col">Check-in</th>
+                                     {#if clientData?.meal_options_enabled}
+                                        <th scope="col">Meal Preference</th>
+                                        {/if}
+                                    <th scope="col"></th>
+                               
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#if noMatchesSent}
+                            <tr class="clickable-row">
+                            <td colspan="8" class="py-10 text-center text-sm text-gray-500">
+                            No guests found for "{searchTermSent}".
+                            </td>
+                            </tr>
+                            {:else if emptySentData}
+                            <tr>
+                             <td colspan="8" class="py-10 text-center text-sm text-gray-500">
+                            You have no guests in the <strong>Not Sent</strong> list yet.
+                            </td>
+                            </tr>
+                            {:else}
+                           {#each paginatedGuestsSent as guest}
+                                {@const rsvpStatus = getRsvpStatusBadge(guest.rsvp_status)}
+                                {@const checkInStatus = getCheckInStatusBadge(guest.checked_in)}
+                                <tr class="clickable-row"
+                                    on:keydown={(e) => {
+                                        if (editingGuestId === guest.guest_id) {
+                                        if (e.key === 'Enter') saveGuestEdits();
+                                        if (e.key === 'Escape') cancelEditGuest();
+                                        }
+                                    }}>
+                                    <!-- Select -->
+                                    <td>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedGuestsSent.has(guest.guest_id)}
+                                        on:change={() => toggleSentGuestSelection(guest.guest_id)}
+                                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded-sm focus:ring-blue-500 "
+                                    />
+                                    </td>
+
+                                    <!-- Name + Email -->
+                                    <td style="min-width:150px;">
+                                    {#if editingGuestId === guest.guest_id}
+                                        <input
+                                        class="guest-search-input"
+                                        placeholder="Full name"
+                                        bind:value={editGuestDraft.full_name}
+                                        />
+                                        <div style="margin-top:6px;">
+                                        <input
+                                            class="guest-search-input"
+                                            placeholder="Email"
+                                            bind:value={editGuestDraft.email}
+                                        />
+                                        </div>
+                                    {:else}
+                                        <div class="name-cell" style="font-weight: 500;">
+                                        {guest.full_name || 'N/A'}
+                                        </div>
+                                        {#if guest.email}
+                                        <div style="font-size: 12px; color: #737373;">{guest.email}</div>
+                                        {/if}
+                                    {/if}
+                                    </td>
+
+                                    <!-- Phone -->
+                                    <td style="min-width:100px; opacity:0.6;">
+                                    {#if editingGuestId === guest.guest_id}
+                                        <input
+                                        class="guest-search-input"
+                                        placeholder="Phone"
+                                        bind:value={editGuestDraft.phone}
+                                        />
+                                    {:else}
+                                        {guest.phone || '-'}
+                                    {/if}
+                                    </td>
+
+                                    <!-- RSVP (now editable as boolean) -->
+                                    <td style="min-width:50px;"> 
+                                    {#if editingGuestId === guest.guest_id}
+                                        <select class="guest-search-input" bind:value={editGuestDraft.rsvp_status}>
+                                <option value="">Pending</option>
+                                <option value="true">Confirmed</option>
+                                <option value="false">Declined</option>
+                                </select>
+                                    {:else}
+                                        <span class="badge {rsvpStatus.class}">{rsvpStatus.text}</span>
+                                    {/if}
+                                    </td>
+
+                                    <!-- Guest Count -->
+                                    <td style="min-width:50px; opacity:0.6;">
+                                    {#if editingGuestId === guest.guest_id}
+                                        <input
+                                        class="guest-search-input"
+                                        type="number"
+                                        min="1"
+                                        bind:value={editGuestDraft.guest_count}
+                                        style="max-width:90px;"
+                                        />
+                                    {:else}
+                                        {guest.guest_count || 1}
+                                    {/if}
+                                    </td>
+
+                                    <!-- Check-In (now editable as boolean) -->
+                                    <td>
+                                    {#if editingGuestId === guest.guest_id}
+                                        <label style="display:flex; align-items:center; gap:8px;">
+                                        <input type="checkbox" bind:checked={editGuestDraft.checked_in} />
+                                        <span style="font-size: 0.9rem;">
+                                            {editGuestDraft.checked_in ? 'Checked In' : 'Not Checked In'}
+                                        </span>
+                                        </label>
+                                    {:else}
+                                        <span class="badge {checkInStatus.class}">{checkInStatus.text}</span>
+                                    {/if}
+                                    </td>
+
+                                    <!-- Meal Preference badges (unchanged) -->
+                                  
+                                {#if clientData?.meal_options_enabled}
+                                    <td>
+                                    {#each extractMeals(guest.meal_preference) as meal}
+                                        <span class="badge badge-meal">{meal}</span>
+                                    {/each}
+                                    {#if extractMeals(guest.meal_preference).length === 0}
+                                        <span class="text-zinc-400 text-sm">—</span>
+                                    {/if}
+                                    </td>
+                                {/if}
+                                                                  
+                                    <!-- Actions: Save/Cancel always visible in edit mode -->
+                                    <td style="white-space:nowrap;">
+                                    
+                                        <div class="flex items-center gap-2">
+                                    {#if editingGuestId === guest.guest_id}
+                                        <button
+                                        class="action-btn primary"
+                                        style="height:28px;"
+                                        on:click|stopPropagation={saveGuestEdits}
+                                        disabled={isSavingGuest}
+                                        title="Save changes"
+                                        >
+                                        <!-- no collapsing label: keep always visible -->
+                                        <span class="btn-label">
+                                            {isSavingGuest ? 'Saving…' : 'SAVE'}
+                                        </span>
+                                        </button>
+
+                                        <button
+                                        class="action-btn"
+                                        style="height:28px;"
+                                        on:click|stopPropagation={cancelEditGuest}
+                                        title="Cancel"
+                                        >
+                                        <span style="btn-label">Cancel</span>
+                                        </button>
+                                    {:else}
+                                    <span
+                                        class="action-btn-db"
+                                        on:click|stopPropagation={() => goto(`/${clientSlug}/dashboard/details/${guest.guest_id}`)}
+                                        title="See Guest Details"
+                                        >
+                                        VIEW
+                                    </span>
+
+                                        <span
+                                        class="action-btn-db"
+                                        on:click|stopPropagation={() => startEditGuest(guest)}
+                                        title="See Guest Details"
+                                        >
+                                        EDIT
+                                </span>
+                                {/if}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {/each}
+
+
+
+                           {#if paginatedGuestsSent.length === 0}
+                                <tr>
+                                <td colspan="999" class="py-8 text-center text-sm text-gray-500">
+                                No rows on this page. Try going back a page.
+                                </td>
+                                </tr>
+                            {/if}
+                            {/if}
+                        </tbody>
+                    </table>
+                    
+                    <div class="pagination">
+                        <button on:click={() => goToSentGuestPage(guestPageSent - 1)} disabled={guestPageSent === 1} class="pagination-label">Prev</button>
+                        {#each Array(totalSentPages) as _, index}
+                            <button class="pagination-label !opacity-100"
+                                class:active={guestPageSent === index + 1}
+                                on:click={() => goToSentGuestPage(index + 1)}>
+                                {index + 1}
+                                
+                            </button>
+                        {/each}
+                        <button on:click={() => goToSentGuestPage(guestPageSent + 1)} disabled={guestPageSent === totalSentPages} class="pagination-label">Next</button>
+                    </div>
+                </section>
 {/if}
 
+{#if guestsNotSent.length > 0}
+                <!-- Invites Not Sent Table -->
+                <section class="table-container">
+                    <h2 class="section-title">Invites Not Sent</h2>
+                     <h3 class="section-description">Find all your newly imported guests here.</h3>
+
+                    <div class="section-header table">
+                        <div class="search-container">
+                            <!-- <input type="text" class="search-input" placeholder="Search guests..." bind:value={searchTermNotSent}>
+                            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg> -->
+                        </div>
+                        
+                        <div class="table-actions" on:click={handleClickOutside}>
+                            <button class="action-btn" on:click={refreshData} on:mouseenter={() => hoveredAction = 'refresh'} on:mouseleave={() => hoveredAction = null}>
+                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                <span class="action-label" class:expanded={hoveredAction === 'refresh'}>Refresh</span>
+                            </button>
+
+                            {#if selectedGuestsNotSent.size > 0}
+                                <button class="action-btn-delete" on:click={() => showDeleteConfirmation = true} on:mouseenter={() => hoveredAction = 'delete'} on:mouseleave={() => hoveredAction = null}>
+                                    <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                    <span class="action-label-delete font-semibold tracking-[0.33px] visible">Delete ({selectedGuestsNotSent.size})</span>
+                                </button>
+                            {/if}
+                            
+                            <button class="px-4 py-2 bg-black text-white text-xs rounded-xl" on:click={() => showAddGuestModal = true} on:mouseenter={() => hoveredAction = 'add'} on:mouseleave={() => hoveredAction = null}>
+                                <span class="action-label-db tracking-[0.33px] font-semibold">Add a Guest</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" 
+                                        checked={selectedGuestsNotSent.size === guestsNotSent.length && guestsNotSent.length > 0}
+                                        on:change={selectAllNotSentGuests}
+                                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded-sm focus:ring-blue-500 ">
+                                </th>
+                                <th scope="col" class="py-2">Name</th>
+                                <th scope="col">Phone</th>
+                                 <th scope="col">Invite Sent</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
+                        
+                        <tbody>
+                             {#if paginatedGuestsNotSent.length > 0}
+                            {#each paginatedGuestsNotSent as guest}
+                               <!-- <tr class="clickable-row" on:click={(e) => handleGuestRowClick(guest, e)}> -->
+                                 <tr>
+                                    <td>
+                                        <input type="checkbox"
+                                            checked={selectedGuestsNotSent.has(guest.guest_id)}
+                                            on:change={() => toggleNotSentGuestSelection(guest.guest_id)}
+                                            class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded-sm focus:ring-blue-500 ">
+                                    </td>
+                                  <td style="min-width:150px;">
+                                        <div class="name-cell" style="font-weight: 500;">
+                                            {guest.full_name || 'N/A'}
+                                        </div>
+                                        {#if guest.email}
+                                            <div style="font-size: 12px; color: #737373;">{guest.email}</div>
+                                        {/if}
+                                    </td>
+                                    <td style="min-width:125px;">{guest.phone || '-'}</td>
+                                    <td style="min-width:50px;"><span class="badge badge-secondary">Not Sent</span></td>
+                                    <td style="">
+                                        {#if guest.phone}                           
+                                    <span
+                                        class="action-btn-db"
+                                        on:click|stopPropagation={() => sendWhatsAppInvite(guest)}
+                                        title="Send WhatsApp Invite"
+                                        >
+                                        SEND
+                                    </span>
+
+
+                                        {:else}
+                                            <button 
+                                                class="action-btn no-phone-btn" 
+                                                style="height: 28px; background: #ef4444; color: white; border: none;" 
+                                                disabled
+                                                title="No Phone Number">
+                                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                                </svg>
+                                                <span style="margin-left: 4px; font-size: 12px;">No Phone</span>
+                                            </button>
+                                        {/if}
+                                    </td>
+                                </tr>
+                            {/each}
+                            
+                            {#if guestsNotSent.length === 0}
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 48px; color: #737373;">
+                                        {searchTermNotSent ? 'No guests found matching your search.' : 'All guests have been sent invites!'}
+                                    </td>
+                                </tr>
+                            {/if}
+                            {:else}
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 48px; color: #737373;">
+                                No guests found matching your search.
+                                </td>
+                            </tr>
+                            {/if}
+      
+                        </tbody>
+                    </table>
+                    
+                    <div class="pagination">
+                        <button on:click={() => goToNotSentGuestPage(guestPage - 1)} disabled={guestPage === 1} class="pagination-label">Prev</button>
+                        {#each Array(totalNotSentPages) as _, index}
+                            <button 
+                           class="pagination-label !opacity-100"
+                                class:active={guestPage === index + 1}
+                                on:click={() => goToNotSentGuestPage(index + 1)}>
+                                {index + 1}
+                            </button>
+                        {/each}
+                        <button on:click={() => goToNotSentGuestPage(guestPage + 1)} disabled={guestPage === totalNotSentPages} class="pagination-label">Next</button>
+                    </div>
+                </section>
+{/if}
                
                 <!-- Add Guest Modal -->
                 {#if showAddGuestModal}
@@ -3904,83 +3863,7 @@ onMount(async () => {
                     </div>
                 {/if}
 
-                <!-- Message Preview Modal -->
-                {#if showMessagePreviewModal}
-                    <div class="modal-overlay" on:click={closeMessagePreviewModal}>
-                        <div class="modal-content" on:click|stopPropagation style="max-width: 650px;">
-                            <div class="modal-header">
-                                <h3 class="modal-title">
-                                    Preview & Edit {messageType === 'invite' ? 'Invite' : 'Thank You'} Message
-                                </h3>
-                                <button class="modal-close" on:click={closeMessagePreviewModal}>
-                                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                    </svg>
-                                </button>
-                            </div>
-                            
-                            <!-- Recipient Info -->
-                            <div class="recipient-info">
-                                <div class="recipient-header">
-                                    <!-- <svg width="28px" height="28px" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M16 4h2a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2m4-2a2 2 0 00-2 2v2a2 2 0 002 2h4a2 2 0 002-2V4a2 2 0 00-2-2h-4z"/>
-                                    </svg> -->
-                                    <span class="recipient-label">Sending to:</span>
-                                </div>
-                                <div class="recipient-details">
-                                    <div class="recipient-name">{selectedGuestForPreview?.full_name}</div>
-                                    <div class="recipient-phone">{selectedGuestForPreview?.phone}</div>
-                                    {#if selectedGuestForPreview?.email}
-                                        <div class="recipient-email">{selectedGuestForPreview.email}</div>
-                                    {/if}
-                                </div>
-                            </div>
-                            
-                            <!-- Message Editor -->
-                            <div class="form-group">
-                                <label class="form-label">
-                                   
-                                    Your Message:
-                                </label>
-                                <div class="message-editor">
-                                    <textarea 
-                                        class="message-textarea" 
-                                        bind:value={previewMessage}
-                                        rows="12"
-                                        placeholder="Type your message here..."
-                                        >
-                                    </textarea>
-                                </div>
-                                <div class="message-editor-footer">
-                                <div class="character-count">
-                                    {previewMessage.length} characters
-                                </div>
-                               <div class="change-globaltemp">
-    <button on:click={openSettingsModal} style="background: none; border: none; padding: 0; cursor: pointer; color: black; font-size: 1em; font-weight: 500; text-decoration: underline; text-decoration-color: #ababab; text-underline-offset: 4px; opacity: 50%;">
-        Click to change your global template here
-    </button>
-</div>
-                            </div>
-                            </div>
-                            
-                            <!-- Action Buttons -->
-                            <div class="form-actions">
-                                <button class="btn btn-secondary" on:click={closeMessagePreviewModal}>
-                                    Cancel
-                                </button>
-                                <button class="btn btn-primary" on:click={sendPreviewedMessage} style="background: #25D366; border-color: #25D366;">
-                                    <!-- <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" style="margin-right: 8px;">
-                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.570-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
-                                    </svg> -->
-                                    Send via WhatsApp
-                                </button>   
-                            </div>
-                        </div>
-                    </div>
-                {/if}
-                
-                <!-- Settings Modal for Message Templates -->
-{#if showSettingsModal}
+                {#if showSettingsModal}
     <div class="modal-overlay" on:click={closeSettingsModal}>
         <div class="settings-modal-content" on:click|stopPropagation>
             <div class="modal-header">
@@ -4103,6 +3986,79 @@ onMount(async () => {
 
 
 
+                <!-- Message Preview Modal -->
+                {#if showMessagePreviewModal}
+                    <div class="modal-overlay" on:click={closeMessagePreviewModal}>
+                        <div class="modal-content" on:click|stopPropagation style="max-width: 650px;">
+                            <div class="modal-header">
+                                <h3 class="modal-title">
+                                    Preview & Edit {messageType === 'invite' ? 'Invite' : 'Thank You'} Message
+                                </h3>
+                                <button class="modal-close" on:click={closeMessagePreviewModal}>
+                                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Recipient Info -->
+                            <div class="recipient-info">
+                                <div class="recipient-header">
+                                    <!-- <svg width="28px" height="28px" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M16 4h2a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2m4-2a2 2 0 00-2 2v2a2 2 0 002 2h4a2 2 0 002-2V4a2 2 0 00-2-2h-4z"/>
+                                    </svg> -->
+                                    <span class="recipient-label">Sending to:</span>
+                                </div>
+                                <div class="recipient-details">
+                                    <div class="recipient-name">{selectedGuestForPreview?.full_name}</div>
+                                    <div class="recipient-phone">{selectedGuestForPreview?.phone}</div>
+                                    {#if selectedGuestForPreview?.email}
+                                        <div class="recipient-email">{selectedGuestForPreview.email}</div>
+                                    {/if}
+                                </div>
+                            </div>
+                            
+                            <!-- Message Editor -->
+                            <div class="form-group">
+                                <label class="form-label">
+                                   
+                                    Your Message:
+                                </label>
+                                <div class="message-editor">
+                                    <textarea 
+                                        class="message-textarea" 
+                                        bind:value={previewMessage}
+                                        rows="12"
+                                        placeholder="Type your message here..."
+                                        >
+                                    </textarea>
+                                </div>
+                                <div class="message-editor-footer">
+                                <div class="character-count">
+                                    {previewMessage.length} characters
+                                </div>
+                                <!-- <div class="change-globaltemp">
+                                    <a href="">Click to change your global template here</a>
+                                </div> -->
+                            </div>
+                            </div>
+                            
+                            <!-- Action Buttons -->
+                            <div class="form-actions">
+                                <button class="btn btn-secondary" on:click={closeMessagePreviewModal}>
+                                    Cancel
+                                </button>
+                                <button class="btn btn-primary" on:click={sendPreviewedMessage} style="background: #25D366; border-color: #25D366;">
+                                    <!-- <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" style="margin-right: 8px;">
+                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.570-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+                                    </svg> -->
+                                    Send via WhatsApp
+                                </button>   
+                            </div>
+                        </div>
+                    </div>
+                {/if}
+
                 <!-- Metrics Settings Modal -->
                 {#if showMetricsSettings}
                     <div class="modal-overlay" on:click={() => showMetricsSettings = false}>
@@ -4159,4 +4115,3 @@ onMount(async () => {
         </main>
     </div>
 {/if}
-

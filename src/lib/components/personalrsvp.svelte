@@ -42,37 +42,11 @@ $: mealOptions = invite?.meal_options || [];
   };
 
 
-const fontThemes = {
-  client1: {
-    display: "'Snell Roundhand', serif",
-    subheading: "'SangBleu Regular', sans-serif", 
-    button: "'DM Sans ExtraBold', sans-serif",
-    h3: "'SangBleu Light', serif",
-    h2: "'SangBleu Light', serif",
-    p: "'SangBleu Light', serif",
-    smallcaption: "'DM Sans Bold', sans-serif"
-  },
-  client2: {
-    display: "'Playfair Display', serif",
-    subheading: "'Montserrat', sans-serif",
-    button: "'Roboto', sans-serif", 
-    h3: "'Lora', serif",
-    h2: "'Lora', serif",
-    p: "'Open Sans', serif",
-    smallcaption: "'Inter', sans-serif"
-  }
-  // Add more clients as needed
-};
 
-export let clientId = 'client1'; // This would come from your database/props
-let currentTheme = fontThemes[clientId] || fontThemes.client1;
 
 
   onMount(async () => {
-      const root = document.documentElement;
-  Object.entries(currentTheme).forEach(([key, value]) => {
-    root.style.setProperty(`--font-${key}`, value);
-  });
+
 
     if (guest) {
       initializeGuestData(guest);
