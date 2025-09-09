@@ -1695,6 +1695,15 @@ function countMeals(guestsArr, options = []) {
   return counts;
 }
 
+function parseMealPref(mealPrefText) {
+  try {
+    const data = JSON.parse(mealPrefText);
+    return data.guests || [];
+  } catch {
+    return [];
+  }
+}   
+
 $: mealCounts = countMeals(guests, mealOptions);
 
 
@@ -3503,16 +3512,53 @@ return () => {
 
                                     <!-- Meal Preference badges (unchanged) -->
                                   
-                                {#if clientData?.meal_options_enabled}
-                                    <td>
-                                    {#each extractMeals(guest.meal_preference) as meal}
-                                        <span class="badge badge-meal">{meal}</span>
-                                    {/each}
-                                    {#if extractMeals(guest.meal_preference).length === 0}
-                                        <span class="text-zinc-400 text-sm">—</span>
-                                    {/if}
-                                    </td>
-                                {/if}
+                               {#if clientData?.meal_options_enabled}
+  <td style="min-width:200px;">
+    {#each parseMealPref(guest.meal_preference) as pref}
+      <div class="relative group inline-block mr-1 mb-1">
+        <!-- Badge -->
+      <span
+  class={`badge badge-meal !inline-flex items-center gap-1 cursor-pointer
+          ${pref.dietary ? '!bg-red-100 !text-red-700 ring-1 ring-red-300' : ''}`}
+  aria-label={pref.dietary ? `Dietary caution: ${pref.dietary}` : undefined}
+>
+  {#if pref.dietary}
+    <!-- Caution icon -->
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      class="h-2 w-2 shrink-0 text-red-700"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <circle cx="12" cy="16" r="0.8" />
+    </svg>
+  {/if}
+  {pref.meal}
+</span>
+
+
+        <!-- Tooltip -->
+        <div
+          class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2
+                 hidden group-hover:block
+                 px-2 py-1 text-xs text-white bg-black rounded shadow-lg whitespace-nowrap z-10"
+        >
+          {pref.name}{#if pref.dietary}&nbsp;– {pref.dietary}{/if}
+        </div>
+      </div>
+    {/each}
+
+    {#if parseMealPref(guest.meal_preference).length === 0}
+      <span class="text-zinc-400 text-sm">—</span>
+    {/if}
+  </td>
+{/if}
                                                                   
                                     <!-- Actions: Save/Cancel always visible in edit mode -->
                                     <td style="white-space:nowrap;">
