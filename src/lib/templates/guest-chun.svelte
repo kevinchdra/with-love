@@ -707,7 +707,7 @@ onMount(async () => {
   
   // Enhanced interaction handler
   function handleFirstInteraction(event) {
-    console.log('🎵 User interaction detected:', event.type);
+    // console.log('🎵 User interaction detected:', event.type);
     
     // Small delay to ensure the interaction is complete
     setTimeout(() => {
@@ -2002,11 +2002,14 @@ function handleVisibilityChange() {
         <div class="fade-in">
           <!-- Content overlay -->
           <div class="text-white">
-            <p class="font-smallcaption uppercase opacity-80 mb-6">WHAT TO WEAR</p>
+            <p class="font-smallcaption uppercase opacity-80 mb-6">DRESS CODE</p>
             
-            <p class="font-h2 text-white mb-6">
-              We kindly request our guests to wear these colors for our special day.
-            </p>
+            <p class="font-h2 font-light text-white mb-2">Gentlemen:</p>
+             <h4 class="font-h3 eventtime leading-6 mb-8">Suit up, but keep it cool. (ties optional)</h4>
+            <p class="font-h2 font-light text-white mb-2"> Ladies:</p>
+             <h4 class="font-h3 eventtime leading-6 mb-8">A dress to twirl (cocktail, midi or maxi)-<em>just no white, please</em></h4>
+             
+            
 
             <!-- Swatches -->
             <div class="flex justify-center space-x-4 pt-2 mb-12">
