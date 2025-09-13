@@ -2137,10 +2137,19 @@ return () => {
 .name-cell {@apply text-xs;
     font-family:'Inter',sans-serif;
     font-weight:300;
-  
+    
     cursor: pointer;
     transition: color 200ms ease-in-out;
 }
+
+.name-cell-notsent {@apply text-xs py-4;
+    font-family:'Inter',sans-serif;
+    font-weight:300;
+    
+    cursor: pointer;
+    transition: color 200ms ease-in-out;
+}
+
 
 /* ============================================================================
    ACTION BUTTONS
@@ -3701,7 +3710,7 @@ return () => {
                                             class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded-sm focus:ring-blue-500 ">
                                     </td>
                                   <td style="min-width:150px;">
-                                        <div class="name-cell" style="font-weight: 500;">
+                                        <div class="name-cell-notsent" style="font-weight: 500;">
                                             {guest.full_name || 'N/A'}
                                         </div>
                                         {#if guest.email}
@@ -3723,14 +3732,12 @@ return () => {
 
                                         {:else}
                                             <button 
-                                                class="action-btn no-phone-btn" 
-                                                style="height: 28px; background: #ef4444; color: white; border: none;" 
+                                                class="badge badge-secondary" 
+                                                
                                                 disabled
                                                 title="No Phone Number">
-                                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                                </svg>
-                                                <span style="margin-left: 4px; font-size: 12px;">No Phone</span>
+                                               
+                                                <span>No Phone</span>
                                             </button>
                                         {/if}
                                     </td>
