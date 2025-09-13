@@ -8,11 +8,11 @@
   // THEME / PALETTE PER STEP
   // -------------------------------
   const steps = [
- { key: 'client',   bg: '#CFE0F3', text: '#2D3F6D', card: '#EDEAF3', label: '#7C7C8A' },
-{ key: 'event',    bg: '#CBB7F6', text: '#FFFFFF', card: '#EDEAF3', label: '#F2ECFF' },
-{ key: 'deadline', bg: '#646A0A', text: '#E6ECA8', card: '#A7B074', label: '#E6ECA8' },
-{ key: 'slug',     bg: '#C4562D', text: '#FDE4D9', card: '#F2B9A8', label: '#FFE7DD' },
-{ key: 'review',   bg: '#C4562D', text: '#FDE4D9', card: '#F2B9A8', label: '#FFE7DD' },
+ { key: 'client',   bg: '#C8B1FF', text: '#FFFFFF', card: '#E0D4FF', label: '#F1EAFF' },
+{ key: 'event',     bg: '#C8B1FF', text: '#FFFFFF', card: '#E0D4FF', label: '#F1EAFF' },
+{ key: 'location',  bg: '#C8B1FF', text: '#FFFFFF', card: '#E0D4FF', label: '#F1EAFF' },
+{ key: 'deadline', bg: '#C8B1FF', text: '#FFFFFF', card: '#E0D4FF', label: '#F1EAFF' },
+{ key: 'slug',    bg: '#C8B1FF', text: '#FFFFFF', card: '#E0D4FF', label: '#F1EAFF' },
 { key: 'done',     bg: '#F0F637', text: '#1B7B30' }
 ];
 
@@ -34,6 +34,7 @@
   let event_type = '';
   let event_date = '';
   let location = '';
+  let event_time='';
 
   // Step 3 - RSVP deadline
   let rsvp_deadline = '';
@@ -42,6 +43,19 @@
   let errorMsg = '';
   let saving = false;
   let slugCheckNonce = 0; // prevents out-of-order results
+  let slugDebounce;
+  let slugInitialized = false;
+//   let finalSlug = slug;
+
+//   if (!finalSlug) {
+//   const candidate = (customSlug || '').trim();
+//   finalSlug = candidate ? await generateUniqueSlug(slugify(candidate)) 
+//                         : await generateUniqueSlug(slugify(client_name));
+// }
+
+
+
+
 
   // -------------------------------
   // HELPERS
@@ -54,6 +68,76 @@
       .replace(/(^-|-$)+/g, '')
       .trim();
   }
+
+function parseEventTime(event_time) {
+  if (!event_time || !event_time.trim()) {
+    return { start_time: null, end_time: null };
+  }
+  const parts = event_time.split(/\s*-\s*/);
+  if (parts.length !== 2) throw new Error('Please use time like "01:00 PM - 02:00 PM".');
+  const [startRaw, endRaw] = parts;
+  return { start_time: toSqlTime(startRaw), end_time: toSqlTime(endRaw) };
+}
+
+function toSqlTime(s) {
+  if (!s) return null;
+  const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) throw new Error('Please use time like "01:00 PM - 02:00 PM".');
+  let [, h, min, ap] = m;
+  let hh = parseInt(h, 10) % 12;
+  if (ap.toUpperCase() === 'PM') hh += 12;
+  return `${String(hh).padStart(2, '0')}:${min}:00`;
+}
+
+function queueValidate() {
+  clearTimeout(slugDebounce);
+  slugDebounce = setTimeout(() => validateSlug('debounce'), 300);
+}
+
+async function maybeInitSlugStep() {
+  if (slugInitialized || customSlug?.trim()) return; // don't overwrite user input
+  await initSlugStep();
+  slugInitialized = true;
+}
+
+
+
+// function parseTime(time) {
+//   const [hour, minute] = time.slice(0, 5).split(':');
+//   const period = time.slice(6).toUpperCase();
+//   let hours24 = parseInt(hour, 10);
+
+//   if (period === 'PM' && hours24 < 12) hours24 += 12;
+//   if (period === 'AM' && hours24 === 12) hours24 = 0;
+
+//   return `${String(hours24).padStart(2, '0')}:${minute}:00`;
+// }
+
+
+
+function parseDDMMYYYYToISO(s) {
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return null;
+  const [dd, mm, yyyy] = s.split('/').map(Number);
+  if (mm < 1 || mm > 12) return null;
+
+  const daysInMonth = new Date(yyyy, mm, 0).getDate();
+  if (dd < 1 || dd > daysInMonth) return null;
+
+  // Construct ISO (local) and verify round-trip
+  const d = new Date(yyyy, mm - 1, dd);
+  const iso = d.toLocaleDateString('en-CA'); // YYYY-MM-DD (local)
+  // Guard against JS auto-correction (e.g., 31/02)
+  const [Y,M,D] = iso.split('-').map(Number);
+  if (Y !== yyyy || M !== mm || D !== dd) return null;
+
+  return iso;
+}
+
+function isOnOrAfterToday(isoYmd) {
+  if (!isoYmd) return false;
+  const todayStr = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD
+  return isoYmd >= todayStr; // safe lexicographic compare in ISO
+}
 
   // Deduplicate slug: base, base-1, base-2, ...
   async function generateUniqueSlug(base) {
@@ -100,44 +184,92 @@
       : '';
   }
 
- function canNext() {
-  if (step === 0) return client_name.trim().length > 1;
+function canNext() {
+  if (step === 0) {
+    return client_name.trim().length > 1;
+  }
 
- if (step === 1) {
-  const ok = !!(event_type && event_date && location && timezone) && event_date >= todayStr;
-  if (!ok) return false;
-  const eventYear = getYear(event_date);
-  return eventYear >= new Date().getFullYear();
-}
+  if (step === 1) { // Event name + When (date/time)
+    if (!event_type?.trim()) return false;
 
-  if (step === 2) {
-    // must have a deadline, not past, and not after event date
-    if (!rsvp_deadline) return false;
-    if (rsvp_deadline < todayStr) return false;
-    if (isAfter(rsvp_deadline, event_date)) return false;
+    const isoDate = parseDDMMYYYYToISO(event_date);
+    if (!isoDate) return false;             // invalid format/date
+    if (!isOnOrAfterToday(isoDate)) return false;
+
+    // (Optional) validate time range "hh:mm AM/PM - hh:mm AM/PM"
+    // return /^\d{2}:\d{2}\s?(AM|PM)\s*-\s*\d{2}:\d{2}\s?(AM|PM)$/i.test(event_time || '');
     return true;
   }
 
-  if (step === 3) return slugStatus === 'ok';
-  if (step === 4) return true;
+  if (step === 2) { // Where (moved to its own page)
+    return !!location?.trim();
+  }
+
+if (step === 3) { // RSVP deadline
+  // must be present & valid
+  const isoRsvp = parseDDMMYYYYToISO(rsvp_deadline);   // <-- PARSE
+  if (!isoRsvp) return false;
+
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  if (isoRsvp < todayStr) return false;
+
+  const isoEvent = parseDDMMYYYYToISO(event_date);         // event_date is DD/MM/YYYY in UI
+  if (isoEvent && isAfter(isoRsvp, isoEvent)) return false;
+
   return true;
 }
+if (step === 4) {
+  return slugStatus === 'ok';
+}
+}
 
-function nextStep() {
-  // inline validations that also set actionable error text starting with "please"
+async function nextStep() {
   errorMsg = '';
+  
+  if (step === 1) {
+    if (!event_type?.trim()) {
+      errorMsg = 'Please enter the event name.';
+      return;
+    }
 
-  if (step === 2) {
-    if (!rsvp_deadline) {
-      errorMsg = 'Please choose an RSVP deadline.';
+    const isoDate = parseDDMMYYYYToISO(event_date);
+    if (!isoDate) {
+      errorMsg = 'Please enter a valid date (DD/MM/YYYY).';
       return;
     }
-    if (rsvp_deadline < todayStr) {
-      errorMsg = 'Please set the RSVP deadline to today or a future date.';
+    if (!isOnOrAfterToday(isoDate)) {
+      errorMsg = 'Please select today or a future date.';
       return;
     }
-    if (isAfter(rsvp_deadline, event_date)) {
-      errorMsg = 'Please set the RSVP deadline on or before the event date.';
+  }
+
+if (step === 3) {
+  const isoRsvp = parseDDMMYYYYToISO(rsvp_deadline);
+  const isoEvent = parseDDMMYYYYToISO(event_date);
+  const todayStr = new Date().toLocaleDateString('en-CA');
+
+  if (!isoRsvp) {
+    errorMsg = 'Please enter a valid date (DD/MM/YYYY).';
+    return;
+  }
+  if (isoRsvp < todayStr) {
+    errorMsg = 'Please set the RSVP deadline to today or a future date.';
+    return;
+  }
+  if (isoEvent && isAfter(isoRsvp, isoEvent)) {
+    errorMsg = 'Please set the RSVP deadline on or before the event date.';
+    return;
+  }
+}
+
+ if (steps[step]?.key === 'slug') {
+    // If user hasn't validated or it's still checking, validate now
+    if (slugStatus !== 'ok') {
+      await validateSlug('manual');  // runs async check and sets slugStatus
+    }
+    if (slugStatus !== 'ok') {
+      // keep a friendly toast/message if still not ok
+      slugToast = slugToast || 'Please choose an available link.';
       return;
     }
   }
@@ -145,16 +277,17 @@ function nextStep() {
   if (step < totalSteps - 1) {
     step += 1;
     if (steps[step]?.key === 'slug') {
-      initSlugStep();
+       await maybeInitSlugStep();
     }
   }
 }
-  
-  function prevStep() {
+
+
+function prevStep() {
     if (step > 0) step -= 1;
   }
 
-  async function validateSlug(trigger = 'manual') {
+async function validateSlug(trigger = 'manual') {
    const candidate = (customSlug || '').trim();
    if (!candidate) {
      slugStatus = 'idle';
@@ -181,13 +314,12 @@ function nextStep() {
    }
  }
 
- function getYear(isoDate /* YYYY-MM-DD */) {
-  if (!isoDate) return null;
-  return Number(isoDate.slice(0, 4));
-}
+// function getYear(isoDate /* YYYY-MM-DD */) {
+//   if (!isoDate) return null;
+//   return Number(isoDate.slice(0, 4));
+// }
 
-
- let todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD for <input type="date">
+// let todayStr = new Date().toLocaleDateString('en-CA'); //
 
 let timezone = '';
 let timezones = [];
@@ -230,52 +362,166 @@ loadTimezones();
   // -------------------------------
   // FINAL SUBMIT (single DB write flow)
   // -------------------------------
-  async function handleFinalSubmit() {
-    errorMsg = '';
-    saving = true;
+// async function handleFinalSubmit() {
+//   errorMsg = '';
+//   saving = true;
+  
+//   try {
+//     // 1) Make (and dedupe) slug
+//     const base = slugify(client_name);
+//     slug = await generateUniqueSlug(base);
 
-    try {
-      // 1) Make (and dedupe) slug
-      const base = slugify(client_name);
-      slug = await generateUniqueSlug(base);
+//     // 2) Validate + convert RSVP to ISO (YYYY-MM-DD)
+//     const isoRsvp = parseDDMMYYYYToISO(rsvp_deadline);
+//     if (!isoRsvp) throw new Error('RSVP date is invalid. Please use DD/MM/YYYY.');
 
-      // 2) Insert invite
-      const { data: invite, error: invErr } = await supabase
-        .from('invites')
-        .insert({ client_name, slug, rsvp_deadline })
-        .select('id, slug')
-        .single();
-      if (invErr) throw invErr;
+//     // 3) Insert invite
+//     const { data: invite, error: invErr } = await supabase
+//       .from('invites')
+//       .insert({ client_name, slug, rsvp_deadline: isoRsvp })
+//       .select('id, slug')
+//       .single();
+//     if (invErr) throw invErr;
 
-      invite_id = invite.id;
+//     const invite_id = invite.id;
 
-      // 3) Insert event linked to invite
-      const { error: evtErr } = await supabase
-        .from('events')
-        .insert({
-          invite_id,
-          event_type,
-          event_date, // YYYY-MM-DD
-          location,
-          timezone
-        });
-      if (evtErr) throw evtErr;
+//     // 4) Parse optional event time (no fallback)
+//     let start_time = null, end_time = null;
+//     try {
+//       ({ start_time, end_time } = parseEventTime(event_time)); // returns nulls if empty
+//     } catch (e) {
+//       // Friendly validation instead of Postgres 400
+//       errorMsg = e.message; 
+//       saving = false;
+//       return;
+//     }
 
-      // 4) Go to success step then redirect
-      step = 4;
-      setTimeout(() => {
-        goto(`https://startswithlove.com/${slug}/dashboard`, { replaceState: true });
-      }, 900);
-    } catch (e) {
-      errorMsg = e?.message ?? 'Failed to submit.';
-    } finally {
-      saving = false;
+//     // 5) Insert event (omit time keys if null)
+//     const isoEventDate = parseDDMMYYYYToISO(event_date);
+//     const eventPayload = {
+//       invite_id,
+//       event_type,
+//       event_date: isoEventDate,
+//       location,
+//       timezone,
+//       ...(start_time ? { start_time } : {}),
+//       ...(end_time ? { end_time } : {}),
+//     };
+
+//     const { error: evtErr } = await supabase.from('events').insert(eventPayload);
+//     if (evtErr) throw evtErr;
+
+//     // 6) Success → done step + redirect
+//     step = 5;
+//     setTimeout(() => {
+//      goto(`/${slug}/dashboard`, { replaceState: true });
+//     }, 900);
+
+//   } catch (e) {
+//     console.error(e);
+//     errorMsg = e?.message ?? 'Failed to submit.';
+//   } finally {
+//     saving = false;
+//   }
+// }
+
+async function handleFinalSubmit() {
+  errorMsg = '';
+  saving = true;
+
+  try {
+    // --- 1) Decide finalSlug, respecting prior validation ---
+    let finalSlug = slug; // set earlier when validateSlug(...) succeeded
+    if (!finalSlug) {
+      const candidate = (customSlug || '').trim();
+      if (candidate) {
+        // Try user entry first (still pass through deduper for safety)
+        finalSlug = await generateUniqueSlug(slugify(candidate));
+      } else {
+        // Fall back to name-based
+        finalSlug = await generateUniqueSlug(slugify(client_name));
+      }
     }
+
+    // --- 2) Validate RSVP (DD/MM/YYYY -> ISO) ---
+    const isoRsvp = parseDDMMYYYYToISO(rsvp_deadline);
+    if (!isoRsvp) throw new Error('RSVP date is invalid. Please use DD/MM/YYYY.');
+
+    // --- 3) Insert invite with unique-violation retry (TOCTOU safe) ---
+    let invite, invErr;
+    ({ data: invite, error: invErr } = await supabase
+      .from('invites')
+      .insert({ client_name, slug: finalSlug, rsvp_deadline: isoRsvp })
+      .select('id, slug')
+      .single());
+
+    if (invErr?.code === '23505') {
+      // Someone snagged it; retry once with a new unique
+      const retrySlug = await generateUniqueSlug(finalSlug);
+      ({ data: invite, error: invErr } = await supabase
+        .from('invites')
+        .insert({ client_name, slug: retrySlug, rsvp_deadline: isoRsvp })
+        .select('id, slug')
+        .single());
+      if (!invErr) {
+        slugToast = `That link was just taken. We set your link to ${retrySlug}.`;
+      }
+    }
+    if (invErr) throw invErr;
+
+    const invite_id = invite.id;
+    // Ensure we use the authoritative slug returned by DB (may be retrySlug)
+    const finalPersistedSlug = invite.slug;
+
+    // --- 4) Parse optional event time; show friendly error if bad ---
+    let start_time = null, end_time = null;
+    try {
+      // Your helper should return { start_time, end_time } or nulls if empty
+      ({ start_time, end_time } = parseEventTime(event_time));
+    } catch (e) {
+      errorMsg = e.message;
+      saving = false;
+      return;
+    }
+
+    // --- 5) Validate event date & timezone before inserting event ---
+    const isoEventDate = parseDDMMYYYYToISO(event_date);
+    if (!isoEventDate) throw new Error('Event date is invalid. Please use DD/MM/YYYY.');
+    // if (!timezone) throw new Error('Please select a timezone.');
+
+    // Build payload (omit null time fields)
+    const eventPayload = {
+      invite_id,
+      event_type,
+      event_date: isoEventDate,
+      location,
+      timezone,
+      ...(start_time ? { start_time } : {}),
+      ...(end_time ? { end_time } : {}),
+    };
+
+    const { error: evtErr } = await supabase.from('events').insert(eventPayload);
+    if (evtErr) throw evtErr;
+
+    // --- 6) Success → show done step & redirect ---
+    step = 5; // final visible "done" step
+    setTimeout(() => {
+      goto(`/${finalPersistedSlug}/dashboard`, { replaceState: true });
+    }, 900);
+
+  } catch (e) {
+    console.error(e);
+    errorMsg = e?.message ?? 'Failed to submit.';
+  } finally {
+    saving = false;
   }
+}
+
+
 </script>
 
 <!-- PROGRESS BAR -->
-<div class="fixed top-0 left-0 w-full h-2 z-50">
+<div class="fixed top-0 left-0 w-full h-1 z-50">
   <div
     class="h-full transition-all"
     style="
@@ -287,158 +533,209 @@ loadTimezones();
 
 <!-- STEP CONTAINER -->
 <section
-  class="min-h-screen w-full flex items-center justify-center p-6 md:p-10 transition-colors"
-  style="background:{steps[step].bg}; color:{steps[step].text}; font-family:'TT Commons', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Apple Color Emoji','Segoe UI Emoji';"
+  class="min-h-screen w-full flex p-14 md:p-16 lg:p-18 transition-colors"
+  style="background:{steps[step].bg}; color:{steps[step].text};"
 >
   <div class="absolute top-6 right-8 text-xs md:text-sm opacity-80 hover:opacity-100">
-    {#if step < totalSteps - 1}
+    <!-- {#if step < totalSteps - 1}
       <button class="tracking-wide" on:click={nextStep}>SKIP</button>
-    {/if}
+    {/if} -->
   </div>
 
   <!-- CONTENT AREA -->
-  <div class="w-full max-w-5xl text-center">
+  <div class="w-full">
     <!-- STEP 1: CLIENT NAME -->
     {#if step === 0}
-      <h1 class="text-[clamp(28px,4.2vw,56px)] eading-tight mb-10" style="color:{steps[step].text}">
-        What would you like your guests to call you?
+      <h1 class="questions mb-8" style="color:{steps[step].text}">
+        How should your names appear on the invitation?
       </h1>
 
-      <div class="mx-auto w-full max-w-3xl rounded-2xl p-5 md:p-6"
-           style="background:rgba(255,255,255,.35); box-shadow:0 4px 20px rgba(0,0,0,.06);">
-        <div class="grid grid-cols-1 gap-4">
-          <label class="text-xs" style="color:{steps[step].label}">Couple’s Full Names</label>
-          <input
-            class="rounded-lg px-4 py-3 bg-white/80 placeholder-black/50 outline-none focus:ring-2 focus:ring-black/40"
-            placeholder="Eddy & Vania"
-            bind:value={client_name}
-            on:keydown={(e)=> e.key==='Enter' && canNext() && nextStep()}
-          />
-        </div>
-
-        {#if errorMsg}
+      <div class="mx-auto w-full">
+              <input
+                id="client_name"
+                type="text"
+                bind:value={client_name}
+                placeholder="Type your name here"
+                on:keydown={(e)=> e.key==='Enter' && canNext() && nextStep()}
+                class="answers"
+              />
+    {#if errorMsg}
           <p class="text-red-700 text-sm mt-4">{errorMsg}</p>
-        {/if}
-
-        <div class="mt-6 flex items-center justify-center gap-3">
-          <button class="btn" disabled={!canNext() || saving} on:click={nextStep}>
-            Next
-          </button>
-        </div>
+        {/if}  
       </div>
+       <div class="mt-12 flex gap-3">
+         <button
+          class="btn-primary"
+          disabled={!canNext() || saving}
+          on:click={nextStep}
+        >
+          Continue
+        </button>
+        </div>
     {/if}
 
     <!-- STEP 2: EVENT DETAILS -->
     {#if step === 1}
-      <h1 class="text-[clamp(28px,4.2vw,56px)] leading-tight mb-10" style="color:{steps[step].text}">
-        Hi, {client_name || 'there'}.<br/>When &amp; where is the celebration?
-      </h1>
-
-      <div class="mx-auto w-full max-w-5xl rounded-2xl p-5 md:p-6"
-           style="background:rgba(255,255,255,.25); box-shadow:0 4px 20px rgba(0,0,0,.06);">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label class="text-xs" style="color:{steps[step].label}">Event Name</label>
-            <input class="fld" placeholder="Wedding Reception" bind:value={event_type} />
-          </div>
-          <div>
-            <label class="text-xs" style="color:{steps[step].label}">Event Date</label>
-            <input
-                class="fld text-gray-900"
-                type="date"
-                bind:value={event_date}
-                min={todayStr}
-                on:change={() => {
-                  errorMsg = '';
-                  const y = getYear(event_date);
-                  if (y && y < new Date().getFullYear()) {
-                    errorMsg = 'please select current or future year';
-                  }
-                }}
-                on:blur={() => {
-                  const y = getYear(event_date);
-                  if (!event_date) return;
-                  if (y < new Date().getFullYear()) {
-                    errorMsg = 'please select current or future year';
-                  } else if (event_date < todayStr) {
-                    errorMsg = 'please select a date from today onwards';
-                  }
-                }}
-              />
-          </div>
-          <div>
-            <label class="text-xs" style="color:{steps[step].label}">Location</label>
-            <input class="fld" placeholder="The Ritz-Carlton, Ballroom A" bind:value={location} />
-          </div>
-           <div>
-    <label class="text-xs" style="color:{steps[step].label}">Timezone</label>
-   <select
-        class="fld text-gray-900"
-        bind:value={timezone}
-        on:change={() => (errorMsg = '')}
-      >
-        <option value="" disabled hidden>Select timezone</option>
-        {#each timezones as tz}
-          <option value={tz}>{tz}</option>
-        {/each}
-      </select>
-  </div>
-        </div>
-
-        {#if errorMsg}
-          <p class="text-red-700 text-sm mt-4">{errorMsg}</p>
-        {/if}
-
-        <div class="mt-6 flex items-center justify-center gap-3">
-          <button class="btn-secondary" on:click={prevStep}>Back</button>
-          <button class="btn" disabled={!canNext() || saving} on:click={nextStep}>
-            Next
-          </button>
-        </div>
-      </div>
-    {/if}
-
-    <!-- STEP 3: RSVP DEADLINE -->
-    {#if step === 2}
-      <h1 class="text-[clamp(28px,4.2vw,56px)]   leading-tight mb-10">
-        When would you like guests to RSVP by?
-      </h1>
-
-      <div class="mx-auto w-full max-w-md rounded-2xl p-5 md:p-6"
-           style="background:rgba(255,255,255,.18); box-shadow:0 4px 20px rgba(0,0,0,.06);">
-        <label class="text-xs" style="color:{steps[step].label}">RSVP Deadline</label>
-        <input class="fld" type="date" bind:value={rsvp_deadline}
-       min={todayStr} max={event_date}
-       on:change={() => { 
-         // live guard: never allow after event date
-         if (isAfter(rsvp_deadline, event_date)) {
-           errorMsg = 'please set the RSVP deadline on or before the event date.';
-         } else {
-           errorMsg = '';
-         }
-       }} />
-
-        {#if errorMsg}
-          <p class="text-red-200 text-sm mt-4">{errorMsg}</p>
-        {/if}
-
-        <div class="mt-6 flex items-center justify-center gap-3">
-          <button class="btn-secondary" on:click={prevStep}>Back</button>
-          <button class="btn" disabled={!canNext() || saving} on:click={nextStep}>
-            Next
-          </button>
-        </div>
-      </div>
-    {/if}
-
-    {#if step === 3}
-  <h1 class="text-[clamp(28px,4.2vw,46px)]   leading-tight mb-10">
-    How would you like your link viewed?
+  <!-- Event Name -->
+     <h1 class="questions mb-2" style="color:{steps[step].text}">
+    Hi, {client_name || 'there'}!
   </h1>
 
-  <div class="mx-auto w-full max-w-3xl rounded-2xl p-5 md:p-6"
-       style="background:rgba(255,255,255,.18); box-shadow:0 4px 20px rgba(0,0,0,.06);">
-    <label class="text-sm block mb-3 opacity-90" style="color:{steps[step].label}">
+  <h2 class="questions mb-8">What’s the big celebration?</h2>
+  <input
+    class="answers"
+    placeholder="Type your event name"
+    bind:value={event_type}
+    on:input={() => (errorMsg = '')}
+  />
+
+  <!-- Event Date -->
+  <h2 class="questions mb-8 mt-16">When are we celebrating?</h2>
+  <div class="inline-flex max-w-xl items-center mb-8">
+    <!-- Date input -->
+  <div class="relative inline-block">
+  <input
+    type="text"
+    bind:value={event_date}
+    placeholder="DD/MM/YYYY"
+    class="font-ttcommonsreg bg-transparent border-none outline-none
+           text-white placeholder:text-white/50
+           text-3xl md:text-4xl lg:text-5xl
+           w-[14ch] 
+"
+    on:input={() => {
+      errorMsg = '';
+      // Optionally live-validate format here
+    }}
+   on:blur={() => {
+  const iso = parseDDMMYYYYToISO(event_date);
+  const todayISO = new Date(Date.UTC(
+    new Date().getFullYear(),
+    new Date().getMonth(),
+    new Date().getDate()
+  )).toISOString().slice(0,10);
+
+  errorMsg = !iso
+    ? 'Please enter a valid date (DD/MM/YYYY).'
+    : (iso < todayISO ? 'Please select current or future year.' : '');
+}}
+  />
+</div>
+    <!-- Event Time -->
+    <input
+      type="text"
+      bind:value={event_time}
+      class="answers flex-none w-[25ch]"
+      placeholder="00:00 AM/PM - 00:00 AM/PM"
+      on:input={() => (errorMsg = '')}
+    />
+  </div>
+
+  <!-- Location -->
+  <!-- <h2 class="text-3xl md:text-4xl lg:text-5xl mb-8">Where?</h2>
+  <input
+    class="w-full bg-transparent border-none outline-none text-white placeholder:text-white/50 text-3xl md:text-4xl lg:text-5xl"
+    placeholder="Type in the full address here"
+    bind:value={location}
+    on:input={() => (errorMsg = '')}
+  /> -->
+
+  {#if errorMsg}
+    <p class="text-white/90 text-sm mt-2">{errorMsg}</p>
+  {/if}
+
+     <div class="mt-12 flex gap-3">
+      <button  class="btn-primary" on:click={prevStep}>Back</button>
+         <button
+            class="btn-primary"
+          disabled={!canNext() || saving}
+          on:click={nextStep}
+        >
+          Continue
+        </button>
+        </div>
+{/if}
+
+{#if step === 2}
+  <h1 class="questions mb-8">Where is it taking place?</h1>
+  <input
+    class="answers"
+    placeholder="Type in the full address here"
+    bind:value={location}
+    on:input={() => (errorMsg = '')}
+  />
+
+  {#if errorMsg}
+    <p class="text-white/90 text-sm mt-2">{errorMsg}</p>
+  {/if}
+
+  <div class="mt-12 flex gap-3">
+      <button    class="btn-primary" on:click={prevStep}>Back</button>
+         <button
+           class="btn-primary"
+          disabled={!canNext() || saving}
+          on:click={nextStep}
+        >
+          Continue
+        </button>
+        </div>
+{/if}
+
+
+    <!-- STEP 3: RSVP DEADLINE -->
+    {#if step === 3}
+      <h1 class="questions mb-8">
+        When would you like guests to RSVP by?
+      </h1>
+      <div class="mx-auto w-full">
+        <input
+  type="text"
+  bind:value={rsvp_deadline}
+  placeholder="DD/MM/YYYY"
+  class="answers w-[14ch]"
+  on:input={() => {
+    errorMsg = '';  // Clear error on input change
+  }}
+  on:blur={() => {
+    // Validate the input format "DD/MM/YYYY"
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(rsvp_deadline)) {
+      errorMsg = 'Please enter a valid date (DD/MM/YYYY)';
+    } else {
+      // Check if RSVP deadline is before event date
+      const parsedRsvpDate = parseDDMMYYYYToISO(rsvp_deadline);
+      const parsedEventDate = parseDDMMYYYYToISO(event_date);
+      if (parsedRsvpDate && parsedEventDate && isAfter(parsedRsvpDate, parsedEventDate)) {
+        errorMsg = 'Please set the RSVP deadline on or before the event date.';
+      }
+    }
+  }}
+/>
+{#if errorMsg}
+  <p class="text-white/90 text-sm mt-2">{errorMsg}</p>
+{/if}
+       
+
+        <div class="mt-12 flex gap-3">
+      <button    class="btn-primary" on:click={prevStep}>Back</button>
+         <button
+            class="btn-primary"
+          disabled={!canNext() || saving}
+          on:click={nextStep}
+        >
+          Continue
+        </button>
+        </div>
+      </div>
+    {/if}
+
+    {#if step === 4}
+  <h1 class="questions mb-8">
+    Finally, how would you like your link viewed?
+  </h1>
+
+  <div class="mx-auto w-full">
+    <div class="inline-flex justify-between gap-4 items-center">
+    <label class="answers opacity-90" style="color:{steps[step].label}">
       startswithlove.com/
     </label>
 
@@ -447,10 +744,7 @@ loadTimezones();
         class="flex-1 rounded-lg px-4 py-3 outline-none bg-white/90 text-gray-900"
         bind:value={customSlug}
         placeholder="your-link"
-        on:input={() => {
-          slugStatus = 'idle';
-          slugToast = '';
-        }}
+       on:input={() => { slugStatus='idle'; slugToast=''; queueValidate(); }}
        on:keydown={(e) => e.key === 'Enter' && validateSlug('enter')}
    on:blur={() => validateSlug('blur')}
       />
@@ -470,6 +764,7 @@ loadTimezones();
         </svg>
       {/if}
     </div>
+    </div>
 
     <!-- Toast -->
     {#if slugToast}
@@ -478,23 +773,20 @@ loadTimezones();
       </div>
     {/if}
 
-    <div class="mt-6 flex items-center justify-center gap-3">
-      <button class="inline-flex items-center justify-center px-5 py-3 rounded-xl border border-white/70 transition bg-transparent"
-              on:click={prevStep}>
-        Back
-      </button>
-      <button class="inline-flex items-center justify-center px-6 py-3 rounded-xl transition bg-white/90 text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={slugStatus !== 'ok'}
-              on:click={() => nextStep()}>
-        Next
-      </button>
-    </div>
+<div class="mt-12 flex gap-3">
+      <button class="btn-primary" on:click={prevStep}>Back</button>
+       <button 
+  class="btn-primary" 
+  disabled={saving || slugStatus !== 'ok'} 
+  on:click={handleFinalSubmit}
+>
+  {saving ? 'Submitting…' : 'Submit'}
+</button>
+        </div>
   </div>
 {/if}
 
-
-    <!-- STEP 4: REVIEW (NEW) -->
-    {#if step === 4}
+    <!-- {#if step === 5}
       <h1 class="text-[clamp(28px,4.2vw,46px)]   leading-tight mb-8">
         Review your details
       </h1>
@@ -542,11 +834,11 @@ loadTimezones();
           </button>
         </div>
      
-    {/if}
+    {/if} -->
 
-    <!-- STEP 5: DONE -->
+  
     {#if step === 5}
-      <h1 class="text-[clamp(28px,4.2vw,52px)]   leading-tight">
+      <h1 class="questions">
         You’re all set!<br/>
         Let’s see what your invite looks like.
       </h1>
@@ -555,7 +847,36 @@ loadTimezones();
   </div>
 </section>
 
+<style lang="postcss">
+  @reference "tailwindcss";
 
+  input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.questions{
+  @apply text-3xl md:text-4xl lg:text-5xl;
+  font-family:'TT Commons Medium', 'sans-serif';
+}
+
+.answers{
+  @apply 
+    w-full bg-transparent border-none outline-none
+     placeholder:text-white/50 text-3xl md:text-4xl lg:text-5xl opacity-80;
+    font-family:'TT Commons Regular', 'sans-serif';
+}
+
+
+
+.btn-primary{@apply inline-flex items-center justify-center tracking-wide px-12 py-4 rounded-full text-xs leading-none  bg-white text-gray-900 
+                transition hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed;
+            font-family:'TT Commons Medium', 'sans-serif';
+
+}
+
+</style>
 
 <!-- <style lang="postcss">
   @reference tailwindcss;
@@ -584,3 +905,5 @@ loadTimezones();
   /* Ensure smooth height changes on step transitions */
   section { transition: background-color .35s ease, color .35s ease; }
 </style> -->
+
+

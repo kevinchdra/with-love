@@ -343,7 +343,7 @@ async function loadDashboardData() {
             .select('*')
             .eq('invite_id', invite.id)
             .order('full_name')
-            .range(0, 49);
+            
             
         if (guestError) {
             errorMessage = 'Failed to load guest data';

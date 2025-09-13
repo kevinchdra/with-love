@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+@theme {
+  /*TT Commons*/
+  --font-ttcommonsmd: "TT Commons Medium","sans-serif";
+  --font-ttcommonsreg: "TT Commons Regular","sans-serif";
+}
+
+
 
 @font-face{
   font-family: 'Recoleta Regular';
@@ -18,7 +25,6 @@
   src: url('/fonts/Recoleta-Regular.otf') format('opentype');
   font-weight: 300;
 }
-
 
 
 @font-face{
@@ -94,5 +100,12 @@
   font-family: 'TTCommons-Regular';
   src: url('/fonts/TTCommons/TTCommons-Regular.ttf') format('ttf');
   font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TTCommons-Medium';
+  src: url('/fonts/TTCommons/TTCommons-Medium.ttf') format('ttf');
+  font-weight: 500;
   font-style: normal;
 }
