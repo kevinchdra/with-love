@@ -1120,7 +1120,7 @@ function handleVisibilityChange() {
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
-  $: inviteImageUrl = `https://your-supabase-url.supabase.co/storage/v1/object/public/invites-images/${data.clientData?.slug || 'default'}/preview.webp`;
+  $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/chunkit-callyn/preview.webp`;
   $: currentUrl = `https://startswithlove.com${$page.url.pathname}`;
 
 
