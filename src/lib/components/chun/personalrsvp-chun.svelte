@@ -297,6 +297,37 @@
     });
   }
 
+  async function getDressCodeText() {
+  try {
+    const { data, error } = await supabase
+      .from('events')
+      .select('dress_code_text')
+      .eq('invite_id', invite.id)           // use the same invite.id you already have
+      .order('event_date', { ascending: true }) // pick the earliest event (adjust if needed)
+      .limit(1);
+
+    if (error) {
+      console.error('❌ Error fetching dress_code_text:', error);
+      return '';
+    }
+
+    const raw = data?.[0]?.dress_code_text || '';
+    // Keep emails safe + preserve line breaks
+    const escapeHtml = (s) =>
+      s.replace(/&/g, '&amp;')
+       .replace(/</g, '&lt;')
+       .replace(/>/g, '&gt;')
+       .replace(/"/g, '&quot;')
+       .replace(/'/g, '&#39;');
+
+   return raw.trim() ? raw.trim() : '';
+  } catch (e) {
+    console.error('❌ getDressCodeText error:', e);
+    return '';
+  }
+}
+
+
   async function getEventDate() {
     try {
       console.log('🔍 Fetching events for invite.id:', invite.id);
@@ -348,7 +379,7 @@
 
     // Get couple name from the invite object (already available)
     const coupleName = invite?.client_name || 'the couple';
-
+    const dressCodeText = await getDressCodeText();
     const templateParams = {
       to_email: email,
       name: name,
@@ -357,6 +388,7 @@
       couple_name: coupleName, // Add this new parameter
       event_date: eventDate,
       qr_code_url: guestData.qr_code_url,
+      dress_code_text: dressCodeText,
     };
 
     console.log('📧 Sending email to:', email);

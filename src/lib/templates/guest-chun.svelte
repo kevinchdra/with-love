@@ -1977,26 +1977,6 @@ function handleVisibilityChange() {
       <!--End of Countdown-->
       {/if}
 
-      <!-- RSVP -->
-      <div class="">  
-        <PersonalRsvp 
-          guestSlug={$page.params.guestSlug} 
-          guest={data.guest}
-          invite={data.invite}
-        />
-      </div>
-      <!-- End of RSVP -->
-
-      <!-- Wishes -->
-      {#if invite.section_toggle.includes("wishes")}
-      <div class="relative w-full min-h-[100vh] wishes-section overflow-hidden">
-        <div class="fade-in">
-          <Wishes inviteId={invite.id}/>
-        </div>
-      </div>
-      {/if}
-      <!-- End of Wishes -->
-
       <!-- Dress Code -->
       {#if invite.section_toggle.includes("dress-code")}
       <div class="relative w-full min-h-[100vh] z-10 flex flex-col items-center justify-center text-center px-6 overflow-hidden">
@@ -2034,6 +2014,28 @@ function handleVisibilityChange() {
       </div>
       {/if}
       <!-- End of Dress Code -->
+
+      <!-- RSVP -->
+      <div class="">  
+        <PersonalRsvp 
+          guestSlug={$page.params.guestSlug} 
+          guest={data.guest}
+          invite={data.invite}
+        />
+      </div>
+      <!-- End of RSVP -->
+
+      <!-- Wishes -->
+      {#if invite.section_toggle.includes("wishes")}
+      <div class="relative w-full min-h-[100vh] wishes-section overflow-hidden">
+        <div class="fade-in">
+          <Wishes inviteId={invite.id}/>
+        </div>
+      </div>
+      {/if}
+      <!-- End of Wishes -->
+
+      
 
       {#if invite.section_toggle.includes("faq")}
       <!-- Rundown -->
