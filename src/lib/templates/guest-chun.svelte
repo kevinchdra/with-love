@@ -1127,13 +1127,14 @@ function handleVisibilityChange() {
 </script>
 
 <svelte:head>
-  <meta property="og:image" content="{inviteImageUrl}" />
+  <meta property="og:image" content="https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/chunkit-callyn/preview.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:url" content="{currentUrl}" />
+    <meta property="og:title" content="Chun Kit & Callyn — You’re Invited" />
+      <meta property="og:description" content="Join us on celebrating Chun Kit & Callyn's wedding. Tap to open your personal invite." />
     <meta property="og:type" content="website" />
     <link rel="preload" as="image" href={images[0]} fetchpriority="high">
-
     <link rel="preload" as="image" href={backgroundImageUrl} fetchpriority="high">
 
 
