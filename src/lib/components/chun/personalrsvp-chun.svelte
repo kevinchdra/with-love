@@ -118,7 +118,7 @@
     if (!name.trim()) {
       validationErrors.name = 'Name is required';
       isValid = false;
-    } else if (!/^[A-Za-z\s&]+$/.test(name)) {
+      } else if (!/^[\p{L}\s&]+$/u.test(name)) {
       validationErrors.name = 'Name must not contain numbers';
       isValid = false;
     }
