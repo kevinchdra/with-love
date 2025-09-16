@@ -1127,20 +1127,22 @@ function handleVisibilityChange() {
 </script>
 
 <svelte:head>
- <title>You’re Invited — Chun Kit & Callyn</title>
-  <link rel="canonical" href="https://startswithlove.com/chunkit-callyn/ann" />
+    <title>{data.og.title}</title>
+  <link rel="canonical" href="{data.og.url}" />
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="startswithlove.com" />
-  <meta property="og:url" content="https://startswithlove.com/chunkit-callyn/ann" />
-  <meta property="og:title" content="You’re Invited — Chun Kit & Callyn" />
-  <meta property="og:description" content="Join us on our special day. Tap to view your personal invite." />
+  <meta property="og:url" content={data.og.url} />
+  <meta property="og:title" content={data.og.title} />
+  <meta property="og:description" content={data.og.description} />
 
-  <!-- Use JPEG; absolute HTTPS URL -->
-  <meta property="og:image" content="https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/chunkit-callyn/preview.jpg" />
-  <meta property="og:image:secure_url" content="https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/chunkit-callyn/preview.jpg" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
+<meta property="og:image" content="{data.og.image}" />
+<meta property="og:image:secure_url" content="{data.og.image}" />
+<meta property="og:image:type" content="image/jpeg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+
+  <meta name="twitter:card" content="summary_large_image" />
 
 
 
