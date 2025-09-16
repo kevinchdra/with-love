@@ -211,11 +211,17 @@ $: filteredGifts = processGiftsGroupedByGuest(gifts, giftSearchTerm, giftViewMod
 // Pagination calculations for both tables
 $: totalNotSentPages = Math.ceil(guestsNotSent.length / guestsPerPage);
 $: paginatedGuestsNotSent = guestsNotSent.slice(
-    (guestPage - 1) * guestsPerPage,
-    guestPage * guestsPerPage
+  (guestPage - 1) * guestsPerPage,
+  guestPage * guestsPerPage
 );
+$: if (guestPage > totalNotSentPages) {
+  guestPage = Math.max(1, totalNotSentPages || 1);
+}
 
 $: totalSentPages = Math.ceil(guestsSent.length / guestsPerPage);
+$: if (guestPageSent > totalSentPages) {
+  guestPageSent = Math.max(1, totalSentPages || 1);
+}
 $: paginatedGuestsSent = guestsSent.slice(
     (guestPageSent - 1) * guestsPerPage,
     guestPageSent * guestsPerPage
@@ -838,18 +844,42 @@ function selectAllSentGuests() {
     selectedGuestsSent = selectedGuestsSent;
 }
 
-function extractMeals(mealPref) {
+// function extractMeals(mealPref) {
+//   try {
+//     if (!mealPref) return [];
+//     // Supabase often gives JSONB as an object already; but be safe
+//     const obj = typeof mealPref === 'string' ? JSON.parse(mealPref) : mealPref;
+//     const meals = (obj?.guests ?? [])
+//       .map(g => g?.meal)
+//       .filter(Boolean);
+//     // de-dupe (optional)
+//     return [...new Set(meals)];
+//   } catch {
+//     return [];
+//   }
+// }
+
+function extractMeals(mealPref, fallbackCount = 0) {
   try {
-    if (!mealPref) return [];
-    // Supabase often gives JSONB as an object already; but be safe
     const obj = typeof mealPref === 'string' ? JSON.parse(mealPref) : mealPref;
-    const meals = (obj?.guests ?? [])
-      .map(g => g?.meal)
-      .filter(Boolean);
-    // de-dupe (optional)
-    return [...new Set(meals)];
+    const arr = Array.isArray(obj?.guests) ? obj.guests : [];
+
+    const meals = [];
+    for (const entry of arr) {
+      const meal = entry?.meal;
+      const qty  = Number(entry?.qty ?? 1);
+      if (meal) {
+        for (let i = 0; i < Math.max(1, qty); i++) meals.push(meal);
+      }
+    }
+
+    // If no structured meals but we know guest count, fallback
+    if (meals.length === 0 && fallbackCount > 0) {
+      for (let i = 0; i < fallbackCount; i++) meals.push('Unspecified');
+    }
+    return meals;
   } catch {
-    return [];
+    return Array.from({ length: Math.max(0, fallbackCount) }, () => 'Unspecified');
   }
 }
 
@@ -1684,12 +1714,28 @@ $: mealOptions = Array.isArray(clientData?.meal_options)
   : (() => { try { return JSON.parse(clientData?.meal_options || "[]"); } catch { return []; } })();
 
 // Count meals across all guest rows using your helper
+// function countMeals(guestsArr, options = []) {
+//   const counts = Object.fromEntries((options || []).map(o => [o, 0]));
+//   for (const g of guestsArr) {
+//     const meals = extractMeals(g.meal_preference); // <- you already have this
+//     for (const m of meals) {
+//       if (m in counts) counts[m] += 1;           // only count configured options
+//     }
+//   }
+//   return counts;
+// }
+
 function countMeals(guestsArr, options = []) {
   const counts = Object.fromEntries((options || []).map(o => [o, 0]));
+  if (!counts['Unspecified']) counts['Unspecified'] = 0;
+
   for (const g of guestsArr) {
-    const meals = extractMeals(g.meal_preference); // <- you already have this
-    for (const m of meals) {
-      if (m in counts) counts[m] += 1;           // only count configured options
+    if (g.rsvp_status !== true) continue; // align to totalGuests
+    const perPersonMeals = extractMeals(g.meal_preference, Number(g.guest_count || 1));
+
+    for (const m of perPersonMeals) {
+      if (m in counts) counts[m] += 1;
+      else counts['Unspecified'] += 1;
     }
   }
   return counts;
@@ -1705,6 +1751,17 @@ function parseMealPref(mealPrefText) {
 }   
 
 $: mealCounts = countMeals(guests, mealOptions);
+// Sent table: reset to page 1 when query/sort/filter changes
+$: {
+  searchTermSent; sortField; sortDirection; filterRsvp; filterCheckIn;
+  guestPageSent = 1;
+}
+
+// Not Sent table: reset page on its search
+$: {
+  searchTermNotSent;
+  guestPage = 1;
+}
 
 
 // ============================================================================
@@ -2089,7 +2146,7 @@ return () => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0;
+ 
 }
 
 
@@ -2480,7 +2537,6 @@ return () => {
   background: #e5e7ff;   /* soft indigo-ish */
   color: #1e1b4b;        /* deep indigo text */
   margin-right: 4px;
-  margin-bottom: 4px;
   display: inline-block;
 }
 
@@ -3181,7 +3237,7 @@ return () => {
             <div class="dashboard-content">
                 <!-- Key Metrics -->
                 <section class="metrics-section">
-                    <div class="section-header mb-8">
+                    <div class="section-header mb-4">
                          <div class="section-text-block">
                         <h1 class="section-title">Dashboard</h1>
                         <h3 class="section-description">See your wedding metrics, send and manage your invites here</h3>
@@ -3271,7 +3327,7 @@ return () => {
                 <section class="table-container">
                     
                     <h2 class="section-title">Invites Sent</h2>
-                    <h4 class="section-description mb-8">Track RSVP & Check-in status on invites you've sent.</h4>
+                    <h4 class="section-description mb-6">Track RSVP & Check-in status on invites you've sent.</h4>
                     <div class="section-header mb-8">
                         <div class="search-container">
                             <input type="text" class="search-input" placeholder="Search guests..." bind:value={searchTermSent}>
@@ -3649,14 +3705,20 @@ return () => {
                 <!-- Invites Not Sent Table -->
                 <section class="table-container">
                     <h2 class="section-title">Invites Not Sent</h2>
-                     <h3 class="section-description">Find all your newly imported guests here.</h3>
+                     <h3 class="section-description mb-6">Find all your newly imported guests here.</h3>
 
-                    <div class="section-header table">
+                    <div class="section-header table mb-8">
                         <div class="search-container">
-                            <!-- <input type="text" class="search-input" placeholder="Search guests..." bind:value={searchTermNotSent}>
+                           <input
+                                type="text"
+                                class="search-input"
+                                placeholder="Search guests..."
+                                bind:value={searchTermNotSent}
+                            />
                             <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                            </svg> -->
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
                         </div>
                         
                         <div class="table-actions" on:click={handleClickOutside}>
@@ -3698,68 +3760,77 @@ return () => {
                             </tr>
                         </thead>
                         
-                        <tbody>
-                             {#if paginatedGuestsNotSent.length > 0}
-                            {#each paginatedGuestsNotSent as guest}
-                               <!-- <tr class="clickable-row" on:click={(e) => handleGuestRowClick(guest, e)}> -->
-                                 <tr>
-                                    <td>
-                                        <input type="checkbox"
-                                            checked={selectedGuestsNotSent.has(guest.guest_id)}
-                                            on:change={() => toggleNotSentGuestSelection(guest.guest_id)}
-                                            class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded-sm focus:ring-blue-500 ">
-                                    </td>
-                                  <td style="min-width:150px;">
-                                        <div class="name-cell-notsent" style="font-weight: 500;">
-                                            {guest.full_name || 'N/A'}
-                                        </div>
-                                        {#if guest.email}
-                                            <div style="font-size: 12px; color: #737373;">{guest.email}</div>
-                                        {/if}
-                                    </td>
-                                    <td style="min-width:125px;">{guest.phone || '-'}</td>
-                                    <td style="min-width:50px;"><span class="badge badge-secondary">Not Sent</span></td>
-                                    <td style="">
-                                        {#if guest.phone}                           
-                                    <span
-                                        class="action-btn-db"
-                                        on:click|stopPropagation={() => sendWhatsAppInvite(guest)}
-                                        title="Send WhatsApp Invite"
-                                        >
-                                        SEND
-                                    </span>
+                      <tbody>
+  {#if noMatchesNotSent}
+    <tr class="clickable-row">
+      <td colspan="8" class="py-10 text-center text-sm text-gray-500">
+        No guests found for "{searchTermNotSent}".
+      </td>
+    </tr>
 
+  {:else if emptyNotSentData}
+    <tr>
+      <td colspan="8" class="py-10 text-center text-sm text-gray-500">
+        You have no guests in the <strong>Not Sent</strong> list yet.
+      </td>
+    </tr>
 
-                                        {:else}
-                                            <button 
-                                                class="badge badge-secondary" 
-                                                
-                                                disabled
-                                                title="No Phone Number">
-                                               
-                                                <span>No Phone</span>
-                                            </button>
-                                        {/if}
-                                    </td>
-                                </tr>
-                            {/each}
-                            
-                            {#if guestsNotSent.length === 0}
-                                <tr>
-                                    <td colspan="5" style="text-align: center; padding: 48px; color: #737373;">
-                                        {searchTermNotSent ? 'No guests found matching your search.' : 'All guests have been sent invites!'}
-                                    </td>
-                                </tr>
-                            {/if}
-                            {:else}
-                            <tr>
-                                <td colspan="5" style="text-align: center; padding: 48px; color: #737373;">
-                                No guests found matching your search.
-                                </td>
-                            </tr>
-                            {/if}
-      
-                        </tbody>
+  {:else if paginatedGuestsNotSent.length === 0}
+    <!-- Handles out-of-range pages after filtering; shows a friendly hint -->
+    <tr>
+      <td colspan="8" class="py-10 text-center text-sm text-gray-500">
+        No results on this page. Try page 1 or adjust your search.
+      </td>
+    </tr>
+
+  {:else}
+    {#each paginatedGuestsNotSent as guest}
+      <tr>
+        <td>
+          <input
+            type="checkbox"
+            checked={selectedGuestsNotSent.has(guest.guest_id)}
+            on:change={() => toggleNotSentGuestSelection(guest.guest_id)}
+            class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded-sm focus:ring-blue-500 "
+          >
+        </td>
+
+        <td style="min-width:150px;">
+          <div class="name-cell-notsent" style="font-weight: 500;">
+            {guest.full_name || 'N/A'}
+          </div>
+          {#if guest.email}
+            <div style="font-size: 12px; color: #737373;">{guest.email}</div>
+          {/if}
+        </td>
+
+        <td style="min-width:125px;">{guest.phone || '-'}</td>
+        <td style="min-width:50px;"><span class="badge badge-secondary">Not Sent</span></td>
+
+        <td>
+          {#if guest.phone}
+            <span
+              class="action-btn-db"
+              on:click|stopPropagation={() => sendWhatsAppInvite(guest)}
+              title="Send WhatsApp Invite"
+            >
+              SEND
+            </span>
+          {:else}
+            <button
+              class="badge badge-secondary"
+              disabled
+              title="No Phone Number"
+            >
+              <span>No Phone</span>
+            </button>
+          {/if}
+        </td>
+      </tr>
+    {/each}
+  {/if}
+</tbody>
+
                     </table>
                     
                     <div class="pagination">
