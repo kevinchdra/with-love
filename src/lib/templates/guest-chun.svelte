@@ -1127,17 +1127,25 @@ function handleVisibilityChange() {
 </script>
 
 <svelte:head>
+ <title>You’re Invited — Chun Kit & Callyn</title>
+  <link rel="canonical" href="https://startswithlove.com/chunkit-callyn/ann" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="startswithlove.com" />
+  <meta property="og:url" content="https://startswithlove.com/chunkit-callyn/ann" />
+  <meta property="og:title" content="You’re Invited — Chun Kit & Callyn" />
+  <meta property="og:description" content="Join us on our special day. Tap to view your personal invite." />
+
+  <!-- Use JPEG; absolute HTTPS URL -->
   <meta property="og:image" content="https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/chunkit-callyn/preview.jpg" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:url" content={currentUrl} />
-    <meta property="og:title" content="Chun Kit & Callyn — You’re Invited" />
-      <meta property="og:description" content="Join us on celebrating Chun Kit & Callyn's wedding. Tap to open your personal invite." />
-    <meta property="og:type" content="website" />
+  <meta property="og:image:secure_url" content="https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/chunkit-callyn/preview.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+
+
     <link rel="preload" as="image" href={images[0]} fetchpriority="high">
     <link rel="preload" as="image" href={backgroundImageUrl} fetchpriority="high">
-
-
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Preload critical fonts -->
   {#each FONTS_TO_PRELOAD as font}
