@@ -400,35 +400,94 @@ async function refreshData() {
 /**
  * Calculate dashboard metrics from guest and gift data
  */
-function calculateMetrics(guests, gifts) {
-    const invitesSent = guests.filter(g => g.invite_sent === true).length;
-    const invitesNotSent = guests.filter(g => g.invite_sent !== true).length;
-    const rsvpConfirmed = guests.filter(g => g.rsvp_status === true).length;
-    const rsvpNotConfirmed = guests.filter(g => g.rsvp_status === null || g.rsvp_status === undefined).length;
-    const rsvpRejected = guests.filter(g => g.rsvp_status === false).length;
-    const checkIns = guests.filter(g => g.checked_in === true).length;
-    const totalGuests = guests.reduce((sum, g) => sum + (g.rsvp_status === true ? (g.guest_count || 1) : 0), 0);
-    const giftsReceived = gifts.filter(g => g.type === 'received').length;
-    const souvenirsGiven = gifts
-        .filter(g => g.type === 'given')
-        .reduce((sum, g) => sum + (g.quantity || 1), 0);
-    const souvenirsLeft = Math.max(0, totalGuests - souvenirsGiven);
-    const dietaryRestrictions = guests.filter(g => g.dietary_restriction && g.dietary_restriction.trim()).length;
 
-    return {
-        invitesSent,
-        invitesNotSent,
-        rsvpConfirmed,
-        rsvpNotConfirmed,
-        rsvpRejected,
-        checkIns,
-        totalGuests,
-        giftsReceived,
-        souvenirsGiven,
-        souvenirsLeft,
-        dietaryRestrictions
-    };
+
+
+
+
+
+
+
+function calculateMetrics(guests, gifts) {
+  // --- Helpers (local only) ---
+  const isTrue  = (v) => v === true  || v === 'true'  || v === 1 || v === '1';
+  const isFalse = (v) => v === false || v === 'false' || v === 0 || v === '0';
+  const toInt   = (n, d = 0) => Number.isFinite(+n) ? +n : d;
+  const gtype   = (t) => (t ?? '').toString().trim().toLowerCase();
+
+  // --- Invites (record-level) ---
+  const invitesSent    = guests.filter(g => g.invite_sent === true || g.invite_sent === 'true').length;
+  const invitesNotSent = guests.filter(g => !(g.invite_sent === true || g.invite_sent === 'true')).length;
+
+  // --- RSVP buckets (mutually exclusive & exhaustive over sent invites) ---
+  const rsvpConfirmed  = guests.filter(g => isTrue(g.rsvp_status) && (g.invite_sent === true || g.invite_sent === 'true')).length;
+  const rsvpRejected   = guests.filter(g => isFalse(g.rsvp_status) && (g.invite_sent === true || g.invite_sent === 'true')).length;
+  const rsvpNotConfirmed = Math.max(0, invitesSent - rsvpConfirmed - rsvpRejected);
+
+  // --- Check-ins (record-level over sent invites) ---
+  const checkIns = guests.filter(g => isTrue(g.checked_in) && (g.invite_sent === true || g.invite_sent === 'true')).length;
+
+  // --- Headcount (person-level; confirmed only) ---
+  const totalGuests = guests.reduce(
+    (sum, g) => sum + (isTrue(g.rsvp_status) ? toInt(g.guest_count, 1) : 0),
+    0
+  );
+
+  // --- Gifts ---
+  const giftsReceived  = gifts.filter(g => gtype(g.type) === 'received').length; // count rows
+  const souvenirsGiven = gifts
+    .filter(g => gtype(g.type) === 'given')
+    .reduce((sum, g) => sum + toInt(g.quantity, 1), 0);
+
+  // If souvenirs are meant per-person, this is correct:
+  const souvenirsLeft = Math.max(0, totalGuests - souvenirsGiven);
+
+const clean = (s) => (s ?? '').toString().trim();
+const parseMealPref = (v) => {
+  try {
+    const obj = typeof v === 'string' ? JSON.parse(v) : v;
+    const arr = Array.isArray(obj?.guests) ? obj.guests : [];
+    return arr;
+  } catch { return []; }
+};
+
+let dietaryRestrictions = 0;
+
+for (const g of guests) {
+  if (!(g.invite_sent === true || g.invite_sent === 'true')) continue; // (optional) only after invite sent
+  if (!(g.rsvp_status === true || g.rsvp_status === 'true' || g.rsvp_status === 1 || g.rsvp_status === '1')) continue;
+
+  const partySize = Number.isFinite(+g.guest_count) ? +g.guest_count : 1;
+
+  const perPerson = parseMealPref(g.meal_preference);
+  if (perPerson.length > 0) {
+    // Count each person with a non-empty dietary note
+    for (const p of perPerson) {
+      if (clean(p?.dietary)) dietaryRestrictions += 1;
+    }
+  } else {
+    // Fallback: record-level dietary_restriction applies to entire party
+    if (clean(g.dietary_restriction)) {
+      dietaryRestrictions += partySize;
+    }
+  }
 }
+
+  return {
+    invitesSent,
+    invitesNotSent,
+    rsvpConfirmed,
+    rsvpNotConfirmed,
+    rsvpRejected,
+    checkIns,
+    totalGuests,
+    giftsReceived,
+    souvenirsGiven,
+    souvenirsLeft,
+    dietaryRestrictions
+  };
+}
+
 
 /**
  * Calculate percentage for a metric
