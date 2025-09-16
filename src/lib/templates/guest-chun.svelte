@@ -1130,7 +1130,7 @@ function handleVisibilityChange() {
   <meta property="og:image" content="https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/chunkit-callyn/preview.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:url" content="{currentUrl}" />
+    <meta property="og:url" content={currentUrl} />
     <meta property="og:title" content="Chun Kit & Callyn — You’re Invited" />
       <meta property="og:description" content="Join us on celebrating Chun Kit & Callyn's wedding. Tap to open your personal invite." />
     <meta property="og:type" content="website" />
@@ -1652,7 +1652,7 @@ function handleVisibilityChange() {
         <!-- Background Image Carousel -->
         {#if images.length > 0}
           <img
-            src={images[Math.floor(Math.random() * images.length)]}
+            src={images[0]}
             alt="Background"
             class="absolute inset-0 w-full h-full object-cover"
             style="object-position: 65%;"
@@ -1748,7 +1748,7 @@ function handleVisibilityChange() {
       <!--End of Landing-->
 
       <!--Devotions-->
-      {#if invite.section_toggle.includes("devotions")}
+      <!-- {#if invite.section_toggle.includes("devotions")}
       <div id="devotions" class="relative z-10 flex flex-col items-center justify-center text-center min-h-[100vh] px-4 sm:px-6 space-y-8 sm:space-y-12"> 
         <img src="/cross.png" alt="cross" class="w-4 h-5 sm:w-3 sm:h-4 object-fill opacity-80 fade-in">
         <h1 class="font-h2 text-white fade-in">I have found the one whom my soul loves.</h1>
@@ -1756,19 +1756,19 @@ function handleVisibilityChange() {
         <div class="absolute bottom-40 left-1/2 -translate-x-1/2 w-20 h-20 flex justify-center items-center fade-in">
         </div>
       </div>
-      {/if}
+      {/if} -->
       <!--End of Devotions-->
 
       <!--Couple-->
-      {#if invite.section_toggle.includes("groom-intro")}
+      <!-- {#if invite.section_toggle.includes("groom-intro")}
       <div class="relative flex flex-col items-center">
         <div class="absolute inset-0 bg-black/15 z-[5]"></div>
 
-        <!-- Background image -->
+
         <img src="/groom.png" alt="Background" class="w-full h-full object-cover block">
         <img src="/snow.gif" alt="Overlay" class="absolute inset-0 w-full h-full object-cover pointer-events-none z-10">
 
-        <!-- Overlay Content -->
+ 
         <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-3 px-4 fade-in">
           <img src="/deco3.png" alt="Top Deco" class="w-8 sm:w-10 mb-12 opacity-90">
 
@@ -1778,7 +1778,7 @@ function handleVisibilityChange() {
             <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
           </div>
 
-          <!-- Name -->
+   
           <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
             {invite.groom_name}
           </h2>
@@ -1791,17 +1791,17 @@ function handleVisibilityChange() {
           </div>
         </div>
       </div>
-      {/if}
+      {/if} -->
 
-      {#if invite.section_toggle.includes("bride-intro")}
+      <!-- {#if invite.section_toggle.includes("bride-intro")}
       <div class="relative flex flex-col items-center">
         <div class="absolute inset-0 bg-black/15 z-[5]"></div>
 
-        <!-- Background image -->
+ 
         <img src="/bride.png" alt="Background" class="w-full h-full object-cover block">
         <img src="/snow.gif" alt="Overlay" class="absolute inset-0 w-full h-full object-cover pointer-events-none z-10">
 
-        <!-- Overlay Content -->
+   
         <div class="absolute inset-0 flex flex-col items-center justify-center text-center text-white z-10 space-y-3 px-4 fade-in">
           <img src="/deco3.png" alt="Top Deco" class="w-8 sm:w-10 mb-12 opacity-90">
 
@@ -1811,7 +1811,7 @@ function handleVisibilityChange() {
             <img src="/deco2.png" alt="Right Deco" class="w-10 sm:w-14">
           </div>
 
-          <!-- Name -->
+    
           <h2 class="font-['Millionaire_Roman'] text-6xl sm:text-7xl md:text-8xl leading-none mt-0 mb-8">
             {invite.bride_name}
           </h2>
@@ -1824,7 +1824,7 @@ function handleVisibilityChange() {
           </div>
         </div>
       </div>
-      {/if}
+      {/if} -->
       <!--End of Couple-->
 
       <!-- Events -->
@@ -2059,7 +2059,7 @@ function handleVisibilityChange() {
       {/if}
 
       <!-- Our Moments -->
-      {#if invite.section_toggle.includes("our-moments")}
+      <!-- {#if invite.section_toggle.includes("our-moments")}
       <div class="relative z-10 flex flex-col items-center justify-center text-center h-[100vh] px-4 sm:px-6 space-y-6 sm:space-y-8 text-white">
         <div class="fade-in">
           <h1 class="font-['Millionaire_Script'] text-3xl sm:text-4xl md:text-5xl mb-10 sm:mb-14 md:mb-22" style="color: #FAFAEF;">Our Moments</h1>
@@ -2078,7 +2078,7 @@ function handleVisibilityChange() {
           </div>
         </div>
       </div>
-      {/if}
+      {/if} -->
       <!-- End of Our Moments -->
 
       {#if invite.section_toggle.includes("wedding-gift")}
