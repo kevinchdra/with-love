@@ -228,9 +228,19 @@ export async function load({ params, url }) {
   // --- ADDED: server-rendered Open Graph values (no removals to your logic) ---
   const supabaseBaseUrl = 'https://zyoklpfkrxifrykasozh.supabase.co';
   const httpsUrl = url.href.replace('http://', 'https://');
-  const ogTitle = "You’re Invited — Chun Kit & Callyn";
-  const ogDesc = 'Join us on our special day. Tap to view your personal invite.';
-  const ogImage = `${supabaseBaseUrl}/storage/v1/object/public/invites-images/${clientSlug}/preview.jpg`;
+
+  const seo = {
+    title: "You’re Invited — Chun Kit & Callyn",
+    description: 'Join us on our special day. Tap to view your personal invite.',
+    url: httpsUrl,
+    ogType: 'website',
+    siteName: 'startswithlove.com',
+    image: `${supabaseBaseUrl}/storage/v1/object/public/invites-images/${clientSlug}/preview.jpg`,
+    imageType: 'image/jpeg',
+    imageWidth: '1200',
+    imageHeight: '630',
+    twitterCard: 'summary_large_image'
+  };
 
   return {
     guest,
@@ -238,19 +248,7 @@ export async function load({ params, url }) {
     events: events || [],
     templateName: `guest-${guest.invites.template_name}`,
     couple,
-    // ADDED: og payload for <svelte:head>
-    seo: {
-      title: ogTitle,
-      description: ogDesc,
-      url: httpsUrl,
-      ogType: 'website',
-      siteName: 'startswithlove.com',
-      image: ogImage,
-      imageType: 'image/jpeg',
-      imageWidth: '1200',
-      imageHeight: '630',
-      twitterCard: 'summary_large_image'
-    }
+    seo 
   };
 }
 
