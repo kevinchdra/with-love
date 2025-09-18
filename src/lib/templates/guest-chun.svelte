@@ -1127,14 +1127,14 @@ function handleVisibilityChange() {
 </script>
 
 <svelte:head>
-    <title>{data.og.title}</title>
-  <link rel="canonical" href="{data.og.url}" />
+<!-- <title>{data.og.title}</title>
+<link rel="canonical" href="{data.og.url}" />
 
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="startswithlove.com" />
-  <meta property="og:url" content={data.og.url} />
-  <meta property="og:title" content={data.og.title} />
-  <meta property="og:description" content={data.og.description} />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="startswithlove.com" />
+<meta property="og:url" content={data.og.url} />
+<meta property="og:title" content={data.og.title} />
+<meta property="og:description" content={data.og.description} />
 
 <meta property="og:image" content={data.og.image} />
 <meta property="og:image:secure_url" content={data.og.image} />
@@ -1142,7 +1142,24 @@ function handleVisibilityChange() {
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 
-  <meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:card" content="summary_large_image" /> -->
+	<title>With Love | Digital Invites</title>
+<meta name="description" content="You are invited to Chunkit & Callyn's Wedding.">
+
+<!-- Facebook Meta Tags -->
+<meta property="og:url" content="https://startswithlove.com/chunkit-callyn/ann">
+<meta property="og:type" content="website">
+<meta property="og:title" content="With Love | Digital Invites">
+<meta property="og:description" content="You are invited to Chunkit & Callyn's Wedding.">
+<meta property="og:image" content="https://opengraph.b-cdn.net/production/images/9a4aca55-49fb-4aa0-ab66-e9bb7231cb12.jpg?token=_IX2F-lXkk2GvaF6oMgqpv9CghAborNT5cQv66n73SY&height=630&width=1200&expires=33294178462">
+
+<!-- Twitter Meta Tags -->
+<meta name="twitter:card" content="summary_large_image">
+<meta property="twitter:domain" content="startswithlove.com">
+<meta property="twitter:url" content="https://startswithlove.com/chunkit-callyn/ann">
+<meta name="twitter:title" content="With Love | Digital Invites">
+<meta name="twitter:description" content="You are invited to Chunkit & Callyn's Wedding.">
+<meta name="twitter:image" content="https://opengraph.b-cdn.net/production/images/9a4aca55-49fb-4aa0-ab66-e9bb7231cb12.jpg?token=_IX2F-lXkk2GvaF6oMgqpv9CghAborNT5cQv66n73SY&height=630&width=1200&expires=33294178462">
 
 
 
