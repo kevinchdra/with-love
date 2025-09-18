@@ -239,11 +239,17 @@ export async function load({ params, url }) {
     templateName: `guest-${guest.invites.template_name}`,
     couple,
     // ADDED: og payload for <svelte:head>
-    og: {
-      url: httpsUrl,
+    seo: {
       title: ogTitle,
       description: ogDesc,
-      image: ogImage
+      url: httpsUrl,
+      ogType: 'website',
+      siteName: 'startswithlove.com',
+      image: ogImage,
+      imageType: 'image/jpeg',
+      imageWidth: '1200',
+      imageHeight: '630',
+      twitterCard: 'summary_large_image'
     }
   };
 }

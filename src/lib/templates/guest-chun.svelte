@@ -1120,35 +1120,37 @@ function handleVisibilityChange() {
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
-  $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/chunkit-callyn/preview.webp`;
-  $: currentUrl = `https://startswithlove.com${$page.url.pathname}`;
-console.log("🔍 OG tags data:", data.og);
+  // $: inviteImageUrl = `https://zyoklpfkrxifrykasozh.supabase.co/storage/v1/object/public/invites-images/chunkit-callyn/preview.webp`;
+  // $: currentUrl = `https://startswithlove.com${$page.url.pathname}`;
 
+ $: seo = $page.data?.seo; // will exist on invite pages
 </script>
 
 <svelte:head>
-<title>{data.og.title}</title>
-<link rel="canonical" href="{data.og.url}" />
+  {#if seo}
+    <title>{seo.title}</title>
+    <link rel="canonical" href="{seo.url}" />
 
-<meta property="og:type" content="website" />
-<meta property="og:site_name" content="startswithlove.com" />
-<meta property="og:url" content="{data.og.url}" />
-<meta property="og:title" content="{data.og.title}" />
-<meta property="og:description" content="{data.og.description}" />
+    <!-- Open Graph -->
+    <meta property="og:type" content="{seo.ogType}" />
+    <meta property="og:site_name" content="{seo.siteName}" />
+    <meta property="og:url" content="{seo.url}" />
+    <meta property="og:title" content="{seo.title}" />
+    <meta property="og:description" content="{seo.description}" />
 
-<meta property="og:image" content="{data.og.image}" />
-<meta property="og:image:secure_url" content="{data.og.image}" />
-<meta property="og:image:type" content="image/jpeg" />
-<meta property="og:image:width" content="1200" />
-<meta property="og:image:height" content="630" />
+    <meta property="og:image" content="{seo.image}" />
+    <meta property="og:image:secure_url" content="{seo.image}" />
+    <meta property="og:image:type" content="{seo.imageType}" />
+    <meta property="og:image:width" content="{seo.imageWidth}" />
+    <meta property="og:image:height" content="{seo.imageHeight}" />
 
-<meta name="twitter:card" content="summary_large_image" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="{seo.twitterCard}" />
+  {/if}
 
-
-
-    <link rel="preload" as="image" href={images[0]} fetchpriority="high">
-    <link rel="preload" as="image" href={backgroundImageUrl} fetchpriority="high">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" as="image" href={images[0]} fetchpriority="high">
+<link rel="preload" as="image" href={backgroundImageUrl} fetchpriority="high">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Preload critical fonts -->
   {#each FONTS_TO_PRELOAD as font}
     {#each font.urls as url}
